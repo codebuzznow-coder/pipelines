@@ -1,12 +1,12 @@
 # Survey Q&A Pipeline
 
-A clean, organized pipeline setup for deploying the Survey Q&A application on AWS. Includes infrastructure provisioning (Terraform), data pipeline (5% stratified sampling), and application deployment with persistent observability metrics.
+A clean, organized pipeline setup for deploying the Survey Q&A application on AWS. Includes infrastructure provisioning (Terraform), data pipeline (5% stratified sampling), and application deployment with CI/CD via GitHub Actions.
 
 ## Project Structure
 
 ```
 pipeline/
-├── infra/                  # 1. Terraform infrastructure pipeline
+├── infra/                  # Terraform infrastructure
 │   ├── main.tf             # Provider, backend
 │   ├── variables.tf        # Configurable inputs
 │   ├── outputs.tf          # Endpoint URLs, IPs
@@ -14,108 +14,231 @@ pipeline/
 │   ├── s3.tf               # S3 bucket for data
 │   ├── security_groups.tf  # Firewall rules
 │   └── scripts/            # Terraform wrapper scripts
-│       ├── validate.sh     # terraform validate
-│       ├── plan.sh         # terraform plan
-│       ├── apply.sh        # terraform apply
-│       └── destroy.sh      # terraform destroy
 │
-├── data_pipeline/          # 2. Data pipeline (validate → enrich → 5% sample)
-│   ├── config.py           # Paths, settings
-│   ├── stages/
-│   │   ├── validate.py     # Schema and null checks
-│   │   ├── transform.py    # Type coercion, cleaning
-│   │   ├── enrich.py       # Add year labels, region
-│   │   └── sample.py       # 5% stratified sample by role
-│   ├── cache.py            # SQLite cache read/write
+├── data_pipeline/          # Data processing pipeline
+│   ├── stages/             # validate → transform → enrich → sample
 │   ├── run_pipeline.py     # CLI entry point
 │   └── tests/
-│       └── test_pipeline.py
 │
-├── app/                    # 3. Application code
-│   ├── app.py              # Streamlit UI
-│   ├── data_processor.py   # Query logic
-│   ├── query_engine.py     # NL → query type
-│   ├── visualizer.py       # Charts
-│   ├── observability/
-│   │   ├── metrics.py      # Persistent metrics (SQLite-backed)
-│   │   └── config.py       # Metrics config
+├── app/                    # Streamlit application
+│   ├── app.py
+│   ├── observability/      # Metrics and tracing
 │   └── requirements.txt
 │
-├── deploy/                 # 4. Deployment pipeline
-│   ├── Dockerfile          # Container image
-│   ├── docker-compose.yml  # Local/dev compose
-│   ├── scripts/
-│   │   ├── deploy.sh       # Deploy to EC2
-│   │   ├── startup.sh      # Container entrypoint
-│   │   └── healthcheck.sh  # Health check
+├── deploy/                 # Deployment configs
+│   ├── Dockerfile
+│   ├── docker-compose.yml
 │   └── github_actions/
 │       └── deploy.yml      # CI/CD workflow
 │
-├── docs/
-│   ├── ARCHITECTURE.md     # Architecture diagram (Mermaid)
-│   └── DATA_WORKFLOW.md    # Data pipeline workflow
-│
-└── scripts/
-    ├── setup.sh            # One-time setup
-    └── run_all.sh          # Run all pipelines
+├── docs/                   # Documentation
+└── scripts/                # Setup scripts
 ```
 
-## Quick Start
+---
+
+## Deployment Guide (Step-by-Step)
+
+Follow these steps in order to deploy the application.
 
 ### Prerequisites
 
-- Python 3.9+
-- Terraform 1.0+
-- AWS CLI configured (`aws configure`)
-- Docker (for deployment)
+- [ ] **AWS Account** with admin access
+- [ ] **AWS CLI** installed and configured (`aws configure`)
+- [ ] **Terraform** 1.0+ installed
+- [ ] **Docker** installed
+- [ ] **Python** 3.9+
+- [ ] **GitHub Account** with access to this repository
 
-### 1. Setup
+---
+
+### Step 1: Clone the Repository
 
 ```bash
-cd /Users/snarla/aiml/pipeline
-./scripts/setup.sh
+git clone https://github.com/codebuzznow-coder/pipelines.git
+cd pipelines
 ```
 
-### 2. Infrastructure (Terraform)
+---
+
+### Step 2: Configure AWS CLI
+
+Ensure your AWS CLI is configured with credentials:
+
+```bash
+aws configure
+```
+
+Enter your:
+- AWS Access Key ID
+- AWS Secret Access Key
+- Default region (e.g., `us-east-1`)
+- Output format (e.g., `json`)
+
+Verify it works:
+
+```bash
+aws sts get-caller-identity
+```
+
+---
+
+### Step 3: Create AWS Infrastructure (Terraform)
+
+This creates an EC2 instance, S3 bucket, security groups, and IAM roles.
 
 ```bash
 cd infra
-./scripts/validate.sh   # Check config
-./scripts/plan.sh       # Preview changes
-./scripts/apply.sh      # Create resources
-# After demo:
-./scripts/destroy.sh    # Tear down
+
+# (Optional) Copy and edit variables
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars to customize region, instance type, etc.
+
+# Initialize Terraform
+terraform init
+
+# Preview what will be created
+./scripts/plan.sh
+
+# Create the infrastructure
+./scripts/apply.sh
 ```
 
-### 3. Data Pipeline
+**Save the outputs** - you'll need them for GitHub Actions:
+- `ec2_public_ip` - The public IP of your EC2 instance
+- `s3_bucket_name` - The S3 bucket for data
+
+---
+
+### Step 4: Create ECR Repository (for Docker images)
+
+```bash
+aws ecr create-repository --repository-name survey-qa --region us-east-1
+```
+
+---
+
+### Step 5: Set Up GitHub Actions Secrets
+
+Go to your GitHub repository settings:
+**https://github.com/codebuzznow-coder/pipelines/settings/secrets/actions**
+
+Click **"New repository secret"** and add each of these:
+
+| Secret Name | Value | Where to find it |
+|-------------|-------|------------------|
+| `AWS_ACCESS_KEY_ID` | Your AWS access key | AWS Console → IAM → Users → Security credentials |
+| `AWS_SECRET_ACCESS_KEY` | Your AWS secret key | Created with access key |
+| `AWS_ACCOUNT_ID` | 12-digit account ID | AWS Console → Top-right dropdown |
+| `EC2_HOST` | EC2 public IP | Output from Step 3 (`ec2_public_ip`) |
+| `EC2_SSH_KEY` | Contents of your `.pem` file | The private key for your EC2 key pair |
+
+**To get your AWS Account ID:**
+```bash
+aws sts get-caller-identity --query Account --output text
+```
+
+---
+
+### Step 6: Enable GitHub Actions Workflow
+
+Move the workflow file to the correct location:
+
+```bash
+mkdir -p .github/workflows
+cp deploy/github_actions/deploy.yml .github/workflows/deploy.yml
+git add .github
+git commit -m "Enable GitHub Actions CI/CD workflow"
+git push origin main
+```
+
+---
+
+### Step 7: Trigger Deployment
+
+The deployment will automatically run when you push to `main`. You can also trigger it manually:
+
+1. Go to **https://github.com/codebuzznow-coder/pipelines/actions**
+2. Click **"Build and Deploy"** workflow
+3. Click **"Run workflow"** → **"Run workflow"**
+
+---
+
+### Step 8: Access Your Application
+
+Once deployment completes, access your application at:
+
+```
+http://<EC2_PUBLIC_IP>:8501
+```
+
+Replace `<EC2_PUBLIC_IP>` with the IP from Step 3.
+
+---
+
+## Local Development (Optional)
+
+### Run Data Pipeline Locally
 
 ```bash
 cd data_pipeline
+pip install -r ../app/requirements.txt
 python run_pipeline.py --input /path/to/survey_data --sample-pct 5
 ```
 
-### 4. Deploy Application
+### Run App Locally with Docker Compose
 
 ```bash
 cd deploy
-./scripts/deploy.sh
+docker-compose up --build
 ```
 
-## Pipelines Overview
+Access at: http://localhost:8501
 
-| Pipeline | Purpose | Key outputs |
-|----------|---------|-------------|
-| **Infra** | Create/destroy AWS resources (EC2, S3, SG) | Public IP, S3 bucket |
-| **Data** | Validate → transform → enrich → 5% sample → SQLite | `survey_cache.db` |
-| **Deploy** | Build image, push, deploy to EC2 | Running app URL |
+---
 
-## Costs (4-day demo)
+## Cleanup (Stop AWS Charges)
 
-- **EC2 t3.micro**: ~$1
-- **S3**: < $0.10
-- **Total**: ~$2–5 (without ALB)
+When you're done, destroy the infrastructure to avoid ongoing charges:
 
-After the demo, run `./infra/scripts/destroy.sh` to stop all charges.
+```bash
+cd infra
+./scripts/destroy.sh
+```
+
+Also delete the ECR repository:
+
+```bash
+aws ecr delete-repository --repository-name survey-qa --region us-east-1 --force
+```
+
+---
+
+## Estimated Costs (4-day demo)
+
+| Resource | Cost |
+|----------|------|
+| EC2 t3.micro | ~$1 |
+| S3 | < $0.10 |
+| ECR | < $0.50 |
+| **Total** | **~$2-5** |
+
+---
+
+## Troubleshooting
+
+### GitHub Actions fails with "permission denied"
+- Verify `EC2_SSH_KEY` secret contains the full private key including `-----BEGIN` and `-----END` lines
+
+### Cannot connect to EC2
+- Check security group allows inbound traffic on ports 22 (SSH) and 8501 (app)
+- Verify EC2 instance is running: `aws ec2 describe-instances`
+
+### Terraform errors
+- Run `terraform init` to download providers
+- Check AWS credentials: `aws sts get-caller-identity`
+
+---
 
 ## Documentation
 
