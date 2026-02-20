@@ -16,6 +16,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data_pipeline.cache import read_cache, get_cache_stats, cache_exists
+from data_pipeline.run_pipeline import run_pipeline
 from observability import get_metrics
 
 # Initialize metrics
@@ -110,7 +111,7 @@ def render_sidebar():
         st.subheader("Navigation")
         return st.radio(
             "Section",
-            ["Visualization", "Metrics Dashboard"],
+            ["Visualization", "Data Pipeline", "Metrics Dashboard"],
             label_visibility="collapsed"
         )
 
@@ -121,7 +122,7 @@ def render_visualization():
     
     if not cache_exists():
         st.error("No data available. Please run the data pipeline first.")
-        st.code("cd data_pipeline && python run_pipeline.py --input /path/to/survey_data")
+        st.info("💡 Go to the **Data Pipeline** section in the sidebar to upload CSV files and process them.")
         return
     
     df, _ = load_data()
@@ -184,6 +185,125 @@ def render_visualization():
             st.error(f"Error processing query: {e}")
 
 
+def render_data_pipeline():
+    """Data pipeline runner page."""
+    st.header("Run Data Pipeline")
+    
+    st.info("Upload CSV files to process through the data pipeline: validate → transform → enrich → sample → cache")
+    
+    # File upload
+    uploaded_files = st.file_uploader(
+        "Upload Survey Data CSV files",
+        type=["csv"],
+        accept_multiple_files=True,
+        help="Upload one or more CSV files containing survey data"
+    )
+    
+    if uploaded_files:
+        st.success(f"{len(uploaded_files)} file(s) uploaded")
+        
+        # Pipeline options
+        col1, col2 = st.columns(2)
+        with col1:
+            sample_pct = st.slider("Sample Percentage", 1, 100, 5, help="Percentage of data to sample (stratified by role)")
+        with col2:
+            seed = st.number_input("Random Seed", value=42, help="Seed for reproducible sampling")
+        
+        # Run button
+        if st.button("🚀 Run Pipeline", type="primary", use_container_width=True):
+            if not uploaded_files:
+                st.error("Please upload at least one CSV file")
+                return
+            
+            # Create temp directory for uploaded files
+            import tempfile
+            import shutil
+            
+            with tempfile.TemporaryDirectory() as tmpdir:
+                tmp_path = Path(tmpdir) / "uploaded_data"
+                tmp_path.mkdir()
+                
+                # Save uploaded files
+                for uploaded_file in uploaded_files:
+                    file_path = tmp_path / uploaded_file.name
+                    with open(file_path, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                
+                # Show progress
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                
+                try:
+                    status_text.text("Starting pipeline...")
+                    progress_bar.progress(10)
+                    
+                    # Run pipeline
+                    result = run_pipeline(
+                        input_path=str(tmp_path),
+                        sample_pct=sample_pct / 100.0,
+                        seed=int(seed),
+                        skip_cache=False
+                    )
+                    
+                    progress_bar.progress(100)
+                    
+                    if result.get("ok"):
+                        st.success("✅ Pipeline completed successfully!")
+                        
+                        # Show results
+                        st.subheader("Pipeline Results")
+                        
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Rows Loaded", f"{result['stages']['load']['rows']:,}")
+                        with col2:
+                            st.metric("Valid Rows", f"{result['stages']['validate']['rows_valid']:,}")
+                        with col3:
+                            st.metric("Final Sample", f"{result['stages']['sample']['rows_out']:,}")
+                        
+                        if result.get("cache", {}).get("ok"):
+                            st.success(f"✅ Cache built: {result['cache']['rows']:,} rows")
+                        
+                        # Show stage details
+                        with st.expander("View Stage Details"):
+                            st.json(result)
+                        
+                        st.info("🔄 Refresh the page to see the new data in Visualization")
+                        
+                    else:
+                        st.error(f"❌ Pipeline failed: {result.get('error', 'Unknown error')}")
+                        if "stages" in result:
+                            st.json(result)
+                            
+                except Exception as e:
+                    st.error(f"❌ Error running pipeline: {e}")
+                    import traceback
+                    with st.expander("Error Details"):
+                        st.code(traceback.format_exc())
+    
+    # Show current cache status
+    st.divider()
+    st.subheader("Current Cache Status")
+    stats = get_cache_stats()
+    if stats.get("exists"):
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Rows", f"{stats['rows']:,}")
+        with col2:
+            st.metric("Size", f"{stats['size_mb']} MB")
+        with col3:
+            st.metric("Years", stats.get("years", "N/A"))
+        
+        if st.button("🗑️ Clear Cache", type="secondary"):
+            cache_path = Path(stats["path"])
+            if cache_path.exists():
+                cache_path.unlink()
+                st.success("Cache cleared! Upload new data to rebuild.")
+                st.rerun()
+    else:
+        st.info("No cache found. Upload and process data to create a cache.")
+
+
 def render_metrics_dashboard():
     """Metrics and observability dashboard."""
     st.header("Observability Dashboard")
@@ -243,6 +363,8 @@ def main():
     # Render selected page
     if nav == "Visualization":
         render_visualization()
+    elif nav == "Data Pipeline":
+        render_data_pipeline()
     elif nav == "Metrics Dashboard":
         render_metrics_dashboard()
     

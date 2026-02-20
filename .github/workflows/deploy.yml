@@ -125,8 +125,50 @@ jobs:
             curl -f http://localhost:8501/_stcore/health || exit 1
           ENDSSH
       
+      - name: Run Data Pipeline (Optional)
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET }}
+          REGION: ${{ env.AWS_REGION }}
+        if: success() && secrets.S3_BUCKET != ''
+        run: |
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
+            # Check if data exists in S3
+            if aws s3 ls s3://${S3_BUCKET}/survey_data/ --region ${REGION} 2>/dev/null | grep -q "\.csv"; then
+              echo "Found CSV files in S3, running data pipeline..."
+              
+              # Create data directory
+              mkdir -p /tmp/survey_data
+              
+              # Download CSV files from S3
+              aws s3 sync s3://${S3_BUCKET}/survey_data/ /tmp/survey_data/ --region ${REGION} --exclude "*" --include "*.csv"
+              
+              # Run pipeline inside the container
+              sudo docker exec survey-qa python -m data_pipeline.run_pipeline \
+                --input /tmp/survey_data \
+                --sample-pct 5 \
+                --seed 42 || echo "Pipeline run completed (check logs if errors)"
+              
+              echo "Data pipeline completed!"
+            else
+              echo "No CSV files found in S3. Skipping pipeline run."
+              echo "You can upload data via the web UI at http://\$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4):8501"
+            fi
+          ENDSSH
+      
       - name: Notify deployment
         if: success()
         run: |
           echo "Deployment successful!"
           echo "App URL: http://${{ secrets.EC2_HOST }}:8501"
+          echo ""
+          echo "To run the data pipeline:"
+          echo "1. Upload CSV files via the web UI (Data Pipeline section)"
+          echo "2. Upload files to S3 and use the 'Run Data Pipeline' workflow"
+          echo "3. Or SSH to EC2 and run manually"

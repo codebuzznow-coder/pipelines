@@ -1,0 +1,95 @@
+# GitHub Actions workflow to run data pipeline
+# This can be triggered manually or when data files are uploaded
+
+name: Run Data Pipeline
+
+on:
+  workflow_dispatch:
+    inputs:
+      s3_path:
+        description: 'S3 path to CSV files (e.g., s3://bucket-name/survey_data/)'
+        required: true
+        default: ''
+      sample_pct:
+        description: 'Sample percentage (1-100)'
+        required: false
+        default: '5'
+      seed:
+        description: 'Random seed'
+        required: false
+        default: '42'
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  run-pipeline:
+    name: Run Data Pipeline on EC2
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Run Data Pipeline
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          S3_PATH: ${{ github.event.inputs.s3_path }}
+          SAMPLE_PCT: ${{ github.event.inputs.sample_pct }}
+          SEED: ${{ github.event.inputs.seed }}
+          REGION: ${{ env.AWS_REGION }}
+        run: |
+          # Setup SSH
+          mkdir -p ~/.ssh
+          echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
+            set -e
+            
+            echo "=== Running Data Pipeline ==="
+            echo "S3 Path: ${S3_PATH}"
+            echo "Sample %: ${SAMPLE_PCT}"
+            echo "Seed: ${SEED}"
+            
+            # Create temp directory
+            TEMP_DIR=\$(mktemp -d)
+            echo "Downloading files from S3..."
+            
+            # Download CSV files from S3
+            aws s3 sync "${S3_PATH}" "\${TEMP_DIR}/" --region ${REGION} --exclude "*" --include "*.csv"
+            
+            # Check if files were downloaded
+            CSV_COUNT=\$(find "\${TEMP_DIR}" -name "*.csv" | wc -l)
+            if [ "\${CSV_COUNT}" -eq 0 ]; then
+              echo "ERROR: No CSV files found in ${S3_PATH}"
+              exit 1
+            fi
+            
+            echo "Found \${CSV_COUNT} CSV file(s)"
+            
+            # Run pipeline inside the container
+            echo "Running pipeline..."
+            sudo docker exec survey-qa python -m data_pipeline.run_pipeline \
+              --input "\${TEMP_DIR}" \
+              --sample-pct ${SAMPLE_PCT} \
+              --seed ${SEED}
+            
+            # Cleanup
+            rm -rf "\${TEMP_DIR}"
+            
+            echo "=== Pipeline completed successfully ==="
+          ENDSSH
+      
+      - name: Pipeline Status
+        if: success()
+        run: |
+          echo "✅ Data pipeline completed successfully!"
+          echo "View results at: http://${{ secrets.EC2_HOST }}:8501"
