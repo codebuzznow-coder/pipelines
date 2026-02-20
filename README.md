@@ -242,6 +242,13 @@ aws ecr delete-repository --repository-name survey-qa --region us-east-1 --force
      `aws s3 sync s3://YOUR_BUCKET/survey_data/ ./survey_data/` then SSH to EC2 and run the pipeline there, or use the web UI.
 - **Recommended fix:** Add GitHub secret **`EC2_INSTANCE_ID`** (from `terraform output instance_id`). The workflow will then use AWS Systems Manager instead of SSH (no port 22 from GitHub). Run `terraform apply` first so EC2 has the SSM policy.
 
+### Run Data Pipeline: "InvalidInstanceId" / "Instances not in a valid state"
+- The instance is not registered with AWS Systems Manager. **Easiest fix: use SSH instead of SSM.**
+  1. In GitHub **Secrets**: remove **EC2_INSTANCE_ID** (or leave it blank). Set **EC2_HOST** (your EC2 public IP) and **EC2_SSH_KEY** (contents of your `.pem`).
+  2. In **Terraform** `infra/variables.tf`: set `allowed_cidr = "0.0.0.0/0"` so GitHub can SSH. Run `terraform apply`.
+  3. Re-run the workflow; it will use SSH.
+- To fix SSM instead: ensure the instance has the SSM IAM policy (`terraform apply`), has outbound HTTPS (default VPC is fine), and wait 2–5 minutes after instance start for the SSM agent to register.
+
 ### GitHub Actions fails with "permission denied"
 - Verify `EC2_SSH_KEY` secret contains the full private key including `-----BEGIN` and `-----END` lines
 

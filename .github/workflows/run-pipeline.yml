@@ -65,6 +65,11 @@ jobs:
 
           if [ -n "$EC2_INSTANCE_ID" ]; then
             echo "Using AWS Systems Manager..."
+            if ! aws ssm describe-instance-information --filters "Key=InstanceIds,Values=$EC2_INSTANCE_ID" --region "$REGION" --query "InstanceInformationList[0].InstanceId" --output text 2>/dev/null | grep -q "$EC2_INSTANCE_ID"; then
+              echo "::error::Instance $EC2_INSTANCE_ID is not registered with SSM (InvalidInstanceId)."
+              echo "Either: (1) Use SSH instead: remove EC2_INSTANCE_ID, set EC2_HOST + EC2_SSH_KEY, and allow 0.0.0.0/0 on port 22 in the security group. (2) Fix SSM: ensure EC2 has IAM role with AmazonSSMManagedInstanceCore, has outbound HTTPS, and wait a few min after boot."
+              exit 1
+            fi
             SCRIPT="set -e; echo '=== Running Data Pipeline ==='; TEMP_DIR=\$(mktemp -d); aws s3 sync '$S3_PATH' \$TEMP_DIR/ --region '$REGION' --exclude '*' --include '*.csv' --include '*.zip'; CSV_COUNT=\$(find \$TEMP_DIR -name '*.csv' 2>/dev/null | wc -l); ZIP_COUNT=\$(find \$TEMP_DIR -name '*.zip' 2>/dev/null | wc -l); if [ \$CSV_COUNT -eq 0 ] && [ \$ZIP_COUNT -eq 0 ]; then echo 'ERROR: No CSV or ZIP in S3'; exit 1; fi; sudo docker exec survey-qa python -m data_pipeline.run_pipeline --input \$TEMP_DIR --sample-pct $SAMPLE_PCT --seed $SEED; rm -rf \$TEMP_DIR; echo 'Done'"
             CMD_JSON=$(jq -n --arg cmd "$SCRIPT" '{"commands":[$cmd]}')
             COMMAND_ID=$(aws ssm send-command --instance-ids "$EC2_INSTANCE_ID" --document-name "AWS-RunShellScript" --parameters "$CMD_JSON" --region "$REGION" --output text --query "Command.CommandId")
