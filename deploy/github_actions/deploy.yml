@@ -87,19 +87,26 @@ jobs:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+          ECR_REPO: ${{ env.ECR_REPOSITORY }}
+          REGION: ${{ env.AWS_REGION }}
         run: |
           # Setup SSH
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           
-          # Deploy
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << EOF
+          # Deploy - using 'EOF' in quotes prevents variable expansion, so we use unquoted EOF
+          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
+            # Set variables on remote
+            ECR_REGISTRY="${ECR_REGISTRY}"
+            ECR_REPO="${ECR_REPO}"
+            REGION="${REGION}"
+            
             # Login to ECR
-            aws ecr get-login-password --region $AWS_REGION | sudo docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region \$REGION | sudo docker login --username AWS --password-stdin \$ECR_REGISTRY
             
             # Pull new image
-            sudo docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            sudo docker pull \$ECR_REGISTRY/\$ECR_REPO:latest
             
             # Stop and remove old container
             sudo docker stop survey-qa || true
@@ -111,12 +118,12 @@ jobs:
               --restart unless-stopped \
               -p 8501:8501 \
               -v survey-data:/app/data \
-              $ECR_REGISTRY/$ECR_REPOSITORY:latest
+              \$ECR_REGISTRY/\$ECR_REPO:latest
             
             # Health check
             sleep 10
             curl -f http://localhost:8501/_stcore/health || exit 1
-          EOF
+          ENDSSH
       
       - name: Notify deployment
         if: success()

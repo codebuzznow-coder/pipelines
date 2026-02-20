@@ -103,6 +103,25 @@ resource "aws_iam_role_policy" "app_s3" {
   })
 }
 
+resource "aws_iam_role_policy" "app_ecr" {
+  name = "survey-qa-ecr-access"
+  role = aws_iam_role.app.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchCheckLayerAvailability",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchGetImage"
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
 resource "aws_iam_instance_profile" "app" {
   name = "survey-qa-${var.environment}-profile"
   role = aws_iam_role.app.name
