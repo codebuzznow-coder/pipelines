@@ -28,10 +28,16 @@ variable "app_port" {
   default     = 8501
 }
 
-variable "allowed_ssh_cidr" {
-  description = "CIDR block allowed to SSH (e.g. your IP). Use 0.0.0.0/0 with caution."
+variable "allowed_cidr" {
+  description = "CIDR block allowed to access EC2 (SSH, app, HTTPS). Set to your IP/32 for security."
   type        = string
-  default     = "0.0.0.0/0"
+  default     = "173.66.55.228/32"
+}
+
+variable "allowed_ssh_cidr" {
+  description = "Deprecated: Use allowed_cidr instead"
+  type        = string
+  default     = "173.66.55.228/32"
 }
 
 variable "s3_bucket_prefix" {
