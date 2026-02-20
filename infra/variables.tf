@@ -31,7 +31,7 @@ variable "app_port" {
 variable "allowed_cidr" {
   description = "CIDR block allowed to access EC2 (SSH, app, HTTPS). Set to your IP/32 for security."
   type        = string
-  default     = "173.66.55.228/32"
+  default     = "0.0.0.0/0"
 }
 
 variable "allowed_ssh_cidr" {
