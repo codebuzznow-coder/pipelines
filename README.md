@@ -227,6 +227,19 @@ aws ecr delete-repository --repository-name survey-qa --region us-east-1 --force
 
 ## Troubleshooting
 
+### Run Data Pipeline workflow: "S3 path" error
+- Use the **S3 URI**, not the AWS Console URL.
+- **Wrong:** `https://us-east-1.console.aws.amazon.com/s3/buckets/survey-qa-data-301625833185?region=us-east-1&tab=objects`
+- **Correct:** `s3://survey-qa-data-301625833185/survey_data/` (use your bucket name and the folder that contains your CSV/ZIP files)
+
+### Run Data Pipeline workflow: "ssh: connect to host ... port 22: Connection timed out"
+- GitHub Actions runs from **GitHub’s IPs**, not your own. If your EC2 security group allows only **your IP** (e.g. 173.66.55.228), SSH from GitHub will be blocked.
+- **Options:**
+  1. **Allow SSH from anywhere (for workflow only):** In Terraform `infra/variables.tf`, set `allowed_cidr = "0.0.0.0/0"`, run `terraform apply`. Restrict again after the run if you want.
+  2. **Run the pipeline without SSH:** Use the app’s **Data Pipeline** tab at `http://YOUR_EC2_IP:8501`, upload CSV/ZIP there and run the pipeline in the browser.
+  3. **Run from your machine:** From a machine that can reach EC2 (e.g. your laptop), run:  
+     `aws s3 sync s3://YOUR_BUCKET/survey_data/ ./survey_data/` then SSH to EC2 and run the pipeline there, or use the web UI.
+
 ### GitHub Actions fails with "permission denied"
 - Verify `EC2_SSH_KEY` secret contains the full private key including `-----BEGIN` and `-----END` lines
 

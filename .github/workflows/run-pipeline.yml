@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       s3_path:
-        description: 'S3 path to CSV files (e.g., s3://bucket-name/survey_data/)'
+        description: 'S3 URI only (e.g. s3://survey-qa-data-301625833185/survey_data/) — NOT the console URL'
         required: true
         default: ''
       sample_pct:
@@ -36,6 +36,16 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+      
+      - name: Validate S3 path
+        run: |
+          S3_PATH="${{ github.event.inputs.s3_path }}"
+          if [[ ! "$S3_PATH" =~ ^s3:// ]]; then
+            echo "::error::S3_PATH must be an S3 URI, e.g. s3://survey-qa-data-301625833185/survey_data/"
+            echo "You entered something like a console URL. Use the bucket name and prefix only."
+            exit 1
+          fi
+          echo "Using S3 path: $S3_PATH"
       
       - name: Run Data Pipeline
         env:
