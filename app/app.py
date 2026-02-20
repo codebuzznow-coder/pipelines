@@ -86,7 +86,7 @@ def render_sidebar():
             st.caption(f"Years: {stats.get('years', 'N/A')}")
             st.caption(f"Source: {stats.get('source', 'N/A')}")
         else:
-            st.warning("No data cache found. Run the data pipeline first.")
+            st.warning("No data cache found. Use the **Data Pipeline** tab below to upload and run, or run the GitHub workflow with your S3 path.")
         
         st.divider()
         
@@ -122,7 +122,7 @@ def render_visualization():
     
     if not cache_exists():
         st.error("No data available. Please run the data pipeline first.")
-        st.info("💡 Go to the **Data Pipeline** section in the sidebar to upload CSV files and process them.")
+        st.info("💡 Go to **Data Pipeline** in the sidebar to upload CSV/ZIP files, or run the **Run Data Pipeline** GitHub Action with S3 path `s3://your-bucket/survey_data/`.")
         return
     
     df, _ = load_data()

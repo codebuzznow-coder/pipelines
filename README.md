@@ -176,6 +176,12 @@ Replace `<EC2_PUBLIC_IP>` with the IP from Step 3.
 
 ---
 
+## How to Run the Data Pipeline
+
+- **From GitHub (recommended):** Actions → **Run Data Pipeline** → use S3 path `s3://survey-qa-data-XXXXXXXX/survey_data/` (your bucket from `terraform output s3_bucket`).
+- **From the app:** Open http://YOUR_EC2_IP:8501 → **Data Pipeline** in the sidebar → upload CSV/ZIP files → Run Pipeline.
+- **Locally:** `cd data_pipeline && pip install -r ../app/requirements.txt && python run_pipeline.py --input ../survey_data` (put CSV or ZIP files in `survey_data/` first).
+
 ## Local Development (Optional)
 
 ### Run Data Pipeline Locally
@@ -183,8 +189,9 @@ Replace `<EC2_PUBLIC_IP>` with the IP from Step 3.
 ```bash
 cd data_pipeline
 pip install -r ../app/requirements.txt
-python run_pipeline.py --input /path/to/survey_data --sample-pct 5
+python run_pipeline.py --input ../survey_data --sample-pct 5
 ```
+Put your CSV or ZIP files in the `survey_data/` folder at the project root (or use any path).
 
 ### Run App Locally with Docker Compose
 
