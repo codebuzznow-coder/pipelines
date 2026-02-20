@@ -1,0 +1,23 @@
+Outputs:
+
+app_url = "http://100.29.246.15:8501"
+aws_region = "us-east-1"
+instance_id = "i-04960092124b85a7e"
+public_ip = "100.29.246.15"
+s3_bucket = "survey-qa-data-301625833185"
+s3_bucket_arn = "arn:aws:s3:::survey-qa-data-301625833185"
+security_group_id = "sg-013591ccb1d4cb94e"
+ssh_command = "ssh -i ~/.ssh/pipeline_demo.pem ec2-user@100.29.246.15"
+
+=== Outputs ===
+app_url = "http://100.29.246.15:8501"
+aws_region = "us-east-1"
+instance_id = "i-04960092124b85a7e"
+public_ip = "100.29.246.15"
+s3_bucket = "survey-qa-data-301625833185"
+s3_bucket_arn = "arn:aws:s3:::survey-qa-data-301625833185"
+security_group_id = "sg-013591ccb1d4cb94e"
+ssh_command = "ssh -i ~/.ssh/pipeline_demo.pem ec2-user@100.29.246.15"
+
+Infrastructure created. App URL:
+http://100.29.246.15:8501
