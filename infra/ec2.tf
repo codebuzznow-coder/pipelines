@@ -38,6 +38,9 @@ resource "aws_instance" "app" {
     systemctl enable docker
     systemctl start docker
 
+    # Add ec2-user to docker group (allows running docker without sudo)
+    usermod -aG docker ec2-user
+
     # Create app directory
     mkdir -p /opt/survey-qa
     chown ec2-user:ec2-user /opt/survey-qa

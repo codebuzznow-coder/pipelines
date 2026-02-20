@@ -96,17 +96,17 @@ jobs:
           # Deploy
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << EOF
             # Login to ECR
-            aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $ECR_REGISTRY
+            aws ecr get-login-password --region $AWS_REGION | sudo docker login --username AWS --password-stdin $ECR_REGISTRY
             
             # Pull new image
-            docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
+            sudo docker pull $ECR_REGISTRY/$ECR_REPOSITORY:latest
             
             # Stop and remove old container
-            docker stop survey-qa || true
-            docker rm survey-qa || true
+            sudo docker stop survey-qa || true
+            sudo docker rm survey-qa || true
             
             # Run new container
-            docker run -d \
+            sudo docker run -d \
               --name survey-qa \
               --restart unless-stopped \
               -p 8501:8501 \
