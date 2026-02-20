@@ -126,18 +126,20 @@ jobs:
           ENDSSH
       
       - name: Run Data Pipeline (Optional)
+        if: success()
         env:
           EC2_HOST: ${{ secrets.EC2_HOST }}
           EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
           S3_BUCKET: ${{ secrets.S3_BUCKET }}
           REGION: ${{ env.AWS_REGION }}
-        if: success() && secrets.S3_BUCKET != ''
         run: |
-          # Setup SSH
+          if [ -z "$S3_BUCKET" ] || [ -z "$EC2_HOST" ] || [ -z "$EC2_SSH_KEY" ]; then
+            echo "S3_BUCKET, EC2_HOST, or EC2_SSH_KEY not set. Skipping optional pipeline. Use the 'Run Data Pipeline' workflow to run with your S3 path."
+            exit 0
+          fi
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
             # Check if data exists in S3
             if aws s3 ls s3://${S3_BUCKET}/survey_data/ --region ${REGION} 2>/dev/null | grep -qE "\.(csv|zip)"; then
