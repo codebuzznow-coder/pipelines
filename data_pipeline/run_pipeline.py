@@ -16,9 +16,14 @@ from typing import Dict, Any, List
 
 import pandas as pd
 
-from config import ensure_dirs, STAGE_DIR, SAMPLE_PCT, RANDOM_SEED
-from stages import validate_data, transform_data, enrich_data, stratified_sample
-from cache import build_cache, get_cache_stats
+try:
+    from config import ensure_dirs, STAGE_DIR, SAMPLE_PCT, RANDOM_SEED
+    from stages import validate_data, transform_data, enrich_data, stratified_sample
+    from cache import build_cache, get_cache_stats
+except ImportError:
+    from .config import ensure_dirs, STAGE_DIR, SAMPLE_PCT, RANDOM_SEED
+    from .stages import validate_data, transform_data, enrich_data, stratified_sample
+    from .cache import build_cache, get_cache_stats
 
 
 def discover_csv_files(input_path: str) -> List[Path]:
