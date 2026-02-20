@@ -1,10 +1,6 @@
 """Tests for data pipeline stages."""
 import pandas as pd
 import pytest
-import sys
-from pathlib import Path
-
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from stages.validate import validate_data
 from stages.transform import transform_data

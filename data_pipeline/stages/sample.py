@@ -2,7 +2,11 @@
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional
-from ..config import ROLE_COLUMN, SAMPLE_PCT, MIN_SAMPLES_PER_STRATUM, RANDOM_SEED
+
+try:
+    from config import ROLE_COLUMN, SAMPLE_PCT, MIN_SAMPLES_PER_STRATUM, RANDOM_SEED
+except ImportError:
+    from ..config import ROLE_COLUMN, SAMPLE_PCT, MIN_SAMPLES_PER_STRATUM, RANDOM_SEED
 
 
 def _get_primary_role(devtype_val) -> str:

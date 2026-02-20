@@ -1,7 +1,11 @@
 """Stage 1: Validate data (schema, nulls, duplicates)."""
 import pandas as pd
 from typing import Dict, Any, Tuple, List
-from ..config import REQUIRED_COLUMNS, KEY_COLUMNS
+
+try:
+    from config import REQUIRED_COLUMNS, KEY_COLUMNS
+except ImportError:
+    from ..config import REQUIRED_COLUMNS, KEY_COLUMNS
 
 
 def validate_data(df: pd.DataFrame) -> Tuple[pd.DataFrame, pd.DataFrame, Dict[str, Any]]:
