@@ -1,4 +1,4 @@
-"""Data pipeline for Survey Q&A: validate → transform → enrich → sample → cache."""
+"""Data pipeline for Survey Q&A: sample → validate → transform → enrich → cache."""
 try:
     from run_pipeline import run_pipeline
     from cache import build_cache, read_cache, get_cache_stats

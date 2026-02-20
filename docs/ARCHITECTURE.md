@@ -104,7 +104,7 @@ sequenceDiagram
     
     Note over Dev,EC2: 2. Data Pipeline
     Dev->>Dev: python run_pipeline.py
-    Dev->>Dev: validate → transform → enrich → sample
+    Dev->>Dev: sample → validate → transform → enrich
     Dev->>AWS: Upload cache to S3
     
     Note over Dev,EC2: 3. Deploy Pipeline

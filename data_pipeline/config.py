@@ -20,7 +20,7 @@ YEAR_COLUMN = "survey_year"
 REQUIRED_COLUMNS = ["ResponseId", "Country"]
 KEY_COLUMNS = ["ResponseId", ROLE_COLUMN, YEAR_COLUMN]
 
-STAGE_NAMES = ["01_validate", "02_transform", "03_enrich", "04_sample"]
+STAGE_NAMES = ["01_sample", "02_validate", "03_transform", "04_enrich"]
 
 
 def ensure_dirs():

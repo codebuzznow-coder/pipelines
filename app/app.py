@@ -189,7 +189,7 @@ def render_data_pipeline():
     """Data pipeline runner page."""
     st.header("Run Data Pipeline")
     
-    st.info("Upload CSV files to process through the data pipeline: validate → transform → enrich → sample → cache")
+    st.info("Upload CSV files to process through the data pipeline: sample → validate → transform → enrich → cache")
     
     # File upload
     uploaded_files = st.file_uploader(

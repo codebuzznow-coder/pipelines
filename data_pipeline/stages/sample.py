@@ -1,4 +1,4 @@
-"""Stage 4: Stratified sampling (5% by role)."""
+"""Stratified sampling (5% by role). Runs first in pipeline to reduce volume before validate/transform/enrich."""
 import numpy as np
 import pandas as pd
 from typing import Dict, Any, Tuple, Optional

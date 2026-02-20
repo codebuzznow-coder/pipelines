@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """
-Data pipeline CLI: validate → transform → enrich → sample → cache.
+Data pipeline CLI: load → sample → validate → transform → enrich → cache.
+
+Sample runs first to reduce data volume before resource-intensive stages.
 
 Usage:
     python run_pipeline.py --input /path/to/survey_data
@@ -99,7 +101,7 @@ def run_pipeline(
     print(f"{'='*60}")
     
     # 1. Load data
-    print("\n[1/5] Loading data...")
+    print("\n[1/6] Loading data...")
     csv_files = discover_csv_files(input_path)
     if not csv_files:
         result["error"] = f"No CSV files found in {input_path}"
@@ -115,31 +117,10 @@ def run_pipeline(
     result["stages"]["load"] = {"rows": len(df), "files": len(csv_files)}
     print(f"  Total: {len(df)} rows, {len(df.columns)} columns")
     
-    # 2. Validate
-    print("\n[2/5] Validating data...")
-    df_valid, df_quarantine, validate_stats = validate_data(df)
-    save_stage_output(df_valid, "01_validate", validate_stats)
-    result["stages"]["validate"] = validate_stats
-    print(f"  Valid: {validate_stats['rows_valid']}, Quarantined: {validate_stats['rows_quarantined']}")
-    
-    # 3. Transform
-    print("\n[3/5] Transforming data...")
-    df_transformed, transform_stats = transform_data(df_valid)
-    save_stage_output(df_transformed, "02_transform", transform_stats)
-    result["stages"]["transform"] = transform_stats
-    print(f"  Transforms: {len(transform_stats['transforms_applied'])}")
-    
-    # 4. Enrich
-    print("\n[4/5] Enriching data...")
-    df_enriched, enrich_stats = enrich_data(df_transformed, source_label=f"pipeline-{run_id}")
-    save_stage_output(df_enriched, "03_enrich", enrich_stats)
-    result["stages"]["enrich"] = enrich_stats
-    print(f"  Fields added: {enrich_stats['fields_added']}")
-    
-    # 5. Sample
-    print(f"\n[5/5] Stratified sampling ({sample_pct*100}% by role)...")
-    df_sampled, sample_stats = stratified_sample(df_enriched, sample_pct=sample_pct, seed=seed)
-    save_stage_output(df_sampled, "04_sample", sample_stats)
+    # 2. Sample first (reduce volume before heavy stages)
+    print(f"\n[2/6] Stratified sampling ({sample_pct*100}% by role)...")
+    df_sampled, sample_stats = stratified_sample(df, sample_pct=sample_pct, seed=seed)
+    save_stage_output(df_sampled, "01_sample", sample_stats)
     result["stages"]["sample"] = {
         "rows_in": sample_stats["rows_in"],
         "rows_out": sample_stats["rows_out"],
@@ -147,10 +128,31 @@ def run_pipeline(
     }
     print(f"  {sample_stats['rows_in']} → {sample_stats['rows_out']} rows ({sample_stats['reduction_pct']}% reduction)")
     
+    # 3. Validate
+    print("\n[3/6] Validating data...")
+    df_valid, df_quarantine, validate_stats = validate_data(df_sampled)
+    save_stage_output(df_valid, "02_validate", validate_stats)
+    result["stages"]["validate"] = validate_stats
+    print(f"  Valid: {validate_stats['rows_valid']}, Quarantined: {validate_stats['rows_quarantined']}")
+    
+    # 4. Transform
+    print("\n[4/6] Transforming data...")
+    df_transformed, transform_stats = transform_data(df_valid)
+    save_stage_output(df_transformed, "03_transform", transform_stats)
+    result["stages"]["transform"] = transform_stats
+    print(f"  Transforms: {len(transform_stats['transforms_applied'])}")
+    
+    # 5. Enrich
+    print("\n[5/6] Enriching data...")
+    df_enriched, enrich_stats = enrich_data(df_transformed, source_label=f"pipeline-{run_id}")
+    save_stage_output(df_enriched, "04_enrich", enrich_stats)
+    result["stages"]["enrich"] = enrich_stats
+    print(f"  Fields added: {enrich_stats['fields_added']}")
+    
     # 6. Build cache
     if not skip_cache:
         print("\n[6/6] Building SQLite cache...")
-        cache_result = build_cache(df_sampled, source=f"{sample_pct*100}% stratified sample")
+        cache_result = build_cache(df_enriched, source=f"{sample_pct*100}% stratified sample")
         result["cache"] = cache_result
         if cache_result.get("ok"):
             print(f"  Cache: {cache_result['rows']} rows, {cache_result['path']}")
@@ -175,7 +177,7 @@ def run_pipeline(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Data pipeline: validate → transform → enrich → sample → cache"
+        description="Data pipeline: load → sample → validate → transform → enrich → cache"
     )
     parser.add_argument(
         "--input", "-i",

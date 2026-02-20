@@ -16,7 +16,7 @@ pipeline/
 │   └── scripts/            # Terraform wrapper scripts
 │
 ├── data_pipeline/          # Data processing pipeline
-│   ├── stages/             # validate → transform → enrich → sample
+│   ├── stages/             # sample → validate → transform → enrich
 │   ├── run_pipeline.py     # CLI entry point
 │   └── tests/
 │

@@ -2,7 +2,7 @@
 
 ## Overview
 
-The data pipeline processes survey data through 4 stages, creating a 5% stratified sample that maintains representative proportions of each job role.
+The data pipeline processes survey data through 4 stages. Sampling runs first to reduce volume before resource-intensive validate/transform/enrich stages.
 
 ## Pipeline Stages
 
@@ -16,31 +16,31 @@ flowchart TB
         CSV5["survey_2025.csv"]
     end
     
-    subgraph Stage1["Stage 1: Validate"]
+    subgraph Stage1["Stage 1: Sample"]
+        S1["Extract primary role"]
+        S2["Group by role"]
+        S3["Sample 5% per role"]
+        S4["Min 1 per role"]
+    end
+    
+    subgraph Stage2["Stage 2: Validate"]
         V1["Remove duplicates"]
         V2["Check required columns"]
         V3["Quarantine bad rows"]
     end
     
-    subgraph Stage2["Stage 2: Transform"]
+    subgraph Stage3["Stage 3: Transform"]
         T1["Normalize year format"]
         T2["Clean compensation"]
         T3["Standardize countries"]
         T4["Coerce types"]
     end
     
-    subgraph Stage3["Stage 3: Enrich"]
+    subgraph Stage4["Stage 4: Enrich"]
         E1["Add year_label"]
         E2["Add region_group"]
         E3["Add experience_bucket"]
         E4["Add comp_tier"]
-    end
-    
-    subgraph Stage4["Stage 4: Sample"]
-        S1["Extract primary role"]
-        S2["Group by role"]
-        S3["Sample 5% per role"]
-        S4["Min 1 per role"]
     end
     
     subgraph Output["Output"]
@@ -56,89 +56,7 @@ flowchart TB
 
 ## Stage Details
 
-### Stage 1: Validate
-
-```mermaid
-flowchart LR
-    Raw["Raw Data<br/>~50,000 rows"]
-    
-    subgraph Validation
-        D["Remove exact duplicates"]
-        I["Remove duplicate IDs"]
-        N["Check key columns"]
-    end
-    
-    Valid["Valid Data"]
-    Q["Quarantine<br/>(>50% null)"]
-    
-    Raw --> D --> I --> N
-    N -->|"Pass"| Valid
-    N -->|"Fail"| Q
-```
-
-**Checks performed:**
-- Remove exact duplicate rows
-- Remove duplicate ResponseIds (keep first)
-- Quarantine rows with >50% nulls in key columns (ResponseId, DevType, survey_year)
-
-### Stage 2: Transform
-
-```mermaid
-flowchart LR
-    subgraph Before
-        Y1["survey_year: '2024.0'"]
-        C1["Country: 'USA'"]
-        W1["WorkExp: '5 years'"]
-        S1["CompTotal: '-1'"]
-    end
-    
-    subgraph After
-        Y2["survey_year: '2024'"]
-        C2["Country: 'United States'"]
-        W2["WorkExp: 5"]
-        S2["CompTotal: null"]
-    end
-    
-    Before --> T["Transform"] --> After
-```
-
-**Transformations:**
-- Normalize year: `"2024.0"` → `"2024"`
-- Normalize country: `"USA"` → `"United States"`
-- Convert WorkExp to numeric
-- Clean compensation: remove negative values and outliers (>$10M)
-- Strip whitespace from all string columns
-
-### Stage 3: Enrich
-
-```mermaid
-flowchart LR
-    Input["Transformed Data"]
-    
-    subgraph Enrichment
-        YL["year_label<br/>'2024'"]
-        RG["region_group<br/>'North America'"]
-        EB["experience_bucket<br/>'3-5 years'"]
-        CT["comp_tier<br/>'100-150k'"]
-        SRC["_source<br/>'pipeline-20240219'"]
-    end
-    
-    Output["Enriched Data"]
-    
-    Input --> Enrichment --> Output
-```
-
-**Fields added:**
-| Field | Description | Example |
-|-------|-------------|---------|
-| `year_label` | Clean year string | `"2024"` |
-| `region_group` | Continent from country | `"North America"` |
-| `experience_bucket` | Work experience range | `"3-5 years"` |
-| `comp_tier` | Compensation bracket | `"100-150k"` |
-| `_source` | Pipeline run ID | `"pipeline-20240219_143022"` |
-| `_enriched_at` | Timestamp | `"2024-02-19T14:30:22Z"` |
-
-### Stage 4: Stratified Sample
+### Stage 1: Sample
 
 ```mermaid
 flowchart TB
@@ -172,10 +90,93 @@ flowchart TB
 4. Combine all sampled rows
 
 **Properties:**
+- Runs first to reduce data volume before validate/transform/enrich
 - Maintains role proportions (same distribution as original)
 - Guarantees at least 1 row per role (min_per_stratum=1)
 - Reproducible (fixed random seed=42)
 - ~95% reduction in data size
+
+### Stage 2: Validate
+
+```mermaid
+flowchart LR
+    Raw["Raw Data<br/>~50,000 rows"]
+    
+    subgraph Validation
+        D["Remove exact duplicates"]
+        I["Remove duplicate IDs"]
+        N["Check key columns"]
+    end
+    
+    Valid["Valid Data"]
+    Q["Quarantine<br/>(>50% null)"]
+    
+    Raw --> D --> I --> N
+    N -->|"Pass"| Valid
+    N -->|"Fail"| Q
+```
+
+**Checks performed:**
+- Remove exact duplicate rows
+- Remove duplicate ResponseIds (keep first)
+- Quarantine rows with >50% nulls in key columns (ResponseId, DevType, survey_year)
+
+### Stage 3: Transform
+
+```mermaid
+flowchart LR
+    subgraph Before
+        Y1["survey_year: '2024.0'"]
+        C1["Country: 'USA'"]
+        W1["WorkExp: '5 years'"]
+        S1["CompTotal: '-1'"]
+    end
+    
+    subgraph After
+        Y2["survey_year: '2024'"]
+        C2["Country: 'United States'"]
+        W2["WorkExp: 5"]
+        S2["CompTotal: null"]
+    end
+    
+    Before --> T["Transform"] --> After
+```
+
+**Transformations:**
+- Normalize year: `"2024.0"` → `"2024"`
+- Normalize country: `"USA"` → `"United States"`
+- Convert WorkExp to numeric
+- Clean compensation: remove negative values and outliers (>$10M)
+- Strip whitespace from all string columns
+
+### Stage 4: Enrich
+
+```mermaid
+flowchart LR
+    Input["Transformed Data"]
+    
+    subgraph Enrichment
+        YL["year_label<br/>'2024'"]
+        RG["region_group<br/>'North America'"]
+        EB["experience_bucket<br/>'3-5 years'"]
+        CT["comp_tier<br/>'100-150k'"]
+        SRC["_source<br/>'pipeline-20240219'"]
+    end
+    
+    Output["Enriched Data"]
+    
+    Input --> Enrichment --> Output
+```
+
+**Fields added:**
+| Field | Description | Example |
+|-------|-------------|---------|
+| `year_label` | Clean year string | `"2024"` |
+| `region_group` | Continent from country | `"North America"` |
+| `experience_bucket` | Work experience range | `"3-5 years"` |
+| `comp_tier` | Compensation bracket | `"100-150k"` |
+| `_source` | Pipeline run ID | `"pipeline-20240219_143022"` |
+| `_enriched_at` | Timestamp | `"2024-02-19T14:30:22Z"` |
 
 ## Output: SQLite Cache
 
@@ -232,16 +233,16 @@ data/
 ├── cache/
 │   └── survey_cache.db      # Final SQLite cache
 ├── stages/
-│   ├── 01_validate/
+│   ├── 01_sample/
 │   │   ├── output.parquet
 │   │   └── stats.json
-│   ├── 02_transform/
+│   ├── 02_validate/
 │   │   ├── output.parquet
 │   │   └── stats.json
-│   ├── 03_enrich/
+│   ├── 03_transform/
 │   │   ├── output.parquet
 │   │   └── stats.json
-│   ├── 04_sample/
+│   ├── 04_enrich/
 │   │   ├── output.parquet
 │   │   └── stats.json
 │   └── run_20240219_143022.json
