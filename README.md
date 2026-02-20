@@ -130,8 +130,9 @@ Click **"New repository secret"** and add each of these:
 | `AWS_ACCESS_KEY_ID` | Your AWS access key | AWS Console → IAM → Users → Security credentials |
 | `AWS_SECRET_ACCESS_KEY` | Your AWS secret key | Created with access key |
 | `AWS_ACCOUNT_ID` | 12-digit account ID | AWS Console → Top-right dropdown |
-| `EC2_HOST` | EC2 public IP | Output from Step 3 (`ec2_public_ip`) |
-| `EC2_SSH_KEY` | Contents of your `.pem` file | The private key for your EC2 key pair |
+| `EC2_HOST` | EC2 public IP | Output from Step 3 (`ec2_public_ip`) — optional if using SSM |
+| `EC2_INSTANCE_ID` | EC2 instance ID (e.g. `i-0abc123...`) | **Recommended.** Enables Run Data Pipeline via SSM (no SSH from GitHub). From Step 3: `terraform output instance_id`. Your IAM user needs `ssm:SendCommand`, `ssm:GetCommandInvocation` on the instance. |
+| `EC2_SSH_KEY` | Contents of your `.pem` file | The private key for your EC2 key pair (only if not using EC2_INSTANCE_ID) |
 
 **To get your AWS Account ID:**
 ```bash
@@ -239,6 +240,7 @@ aws ecr delete-repository --repository-name survey-qa --region us-east-1 --force
   2. **Run the pipeline without SSH:** Use the app’s **Data Pipeline** tab at `http://YOUR_EC2_IP:8501`, upload CSV/ZIP there and run the pipeline in the browser.
   3. **Run from your machine:** From a machine that can reach EC2 (e.g. your laptop), run:  
      `aws s3 sync s3://YOUR_BUCKET/survey_data/ ./survey_data/` then SSH to EC2 and run the pipeline there, or use the web UI.
+- **Recommended fix:** Add GitHub secret **`EC2_INSTANCE_ID`** (from `terraform output instance_id`). The workflow will then use AWS Systems Manager instead of SSH (no port 22 from GitHub). Run `terraform apply` first so EC2 has the SSM policy.
 
 ### GitHub Actions fails with "permission denied"
 - Verify `EC2_SSH_KEY` secret contains the full private key including `-----BEGIN` and `-----END` lines
