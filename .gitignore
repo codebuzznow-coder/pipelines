@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data and cache
+data/
+survey_data/
+*.db
+*.parquet
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+.terraform.lock.hcl
+
+# Secrets
+.env
+*.pem
+*.key
+
+# Docker
+*.tar.gz
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/

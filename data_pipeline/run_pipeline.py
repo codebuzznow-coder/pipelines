@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""
+Data pipeline CLI: validate → transform → enrich → sample → cache.
+
+Usage:
+    python run_pipeline.py --input /path/to/survey_data
+    python run_pipeline.py --input data.csv --sample-pct 5 --seed 42
+"""
+import argparse
+import json
+import os
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Dict, Any, List
+
+import pandas as pd
+
+from config import ensure_dirs, STAGE_DIR, SAMPLE_PCT, RANDOM_SEED
+from stages import validate_data, transform_data, enrich_data, stratified_sample
+from cache import build_cache, get_cache_stats
+
+
+def discover_csv_files(input_path: str) -> List[Path]:
+    """Find CSV files in input path (file or directory)."""
+    p = Path(input_path)
+    if p.is_file() and p.suffix.lower() == ".csv":
+        return [p]
+    if p.is_dir():
+        return sorted(p.glob("**/*.csv"))
+    return []
+
+
+def load_data(csv_files: List[Path]) -> pd.DataFrame:
+    """Load and concatenate CSV files, adding survey_year from filename."""
+    frames = []
+    for f in csv_files:
+        try:
+            df = pd.read_csv(f, low_memory=False)
+            # Extract year from filename (e.g. survey_2024.csv -> 2024)
+            import re
+            match = re.search(r"(20\d{2})", f.name)
+            if match and "survey_year" not in df.columns:
+                df["survey_year"] = match.group(1)
+            frames.append(df)
+            print(f"  Loaded {f.name}: {len(df)} rows")
+        except Exception as e:
+            print(f"  Error loading {f.name}: {e}")
+    
+    if not frames:
+        return pd.DataFrame()
+    return pd.concat(frames, axis=0, ignore_index=True)
+
+
+def save_stage_output(df: pd.DataFrame, stage_name: str, stats: Dict[str, Any]):
+    """Save stage output and stats."""
+    stage_dir = STAGE_DIR / stage_name
+    stage_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Save parquet
+    df.to_parquet(stage_dir / "output.parquet", index=False)
+    
+    # Save stats
+    with open(stage_dir / "stats.json", "w") as f:
+        json.dump(stats, f, indent=2, default=str)
+
+
+def run_pipeline(
+    input_path: str,
+    sample_pct: float = SAMPLE_PCT,
+    seed: int = RANDOM_SEED,
+    skip_cache: bool = False
+) -> Dict[str, Any]:
+    """
+    Run the full data pipeline.
+    
+    Returns:
+        Pipeline run summary
+    """
+    ensure_dirs()
+    run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    
+    result = {
+        "run_id": run_id,
+        "started_at": datetime.now(timezone.utc).isoformat(),
+        "input_path": input_path,
+        "sample_pct": sample_pct * 100,
+        "stages": {},
+        "ok": False
+    }
+    
+    print(f"\n{'='*60}")
+    print(f"Data Pipeline Run: {run_id}")
+    print(f"{'='*60}")
+    
+    # 1. Load data
+    print("\n[1/5] Loading data...")
+    csv_files = discover_csv_files(input_path)
+    if not csv_files:
+        result["error"] = f"No CSV files found in {input_path}"
+        print(f"  ERROR: {result['error']}")
+        return result
+    
+    print(f"  Found {len(csv_files)} CSV file(s)")
+    df = load_data(csv_files)
+    if df.empty:
+        result["error"] = "No data loaded"
+        return result
+    
+    result["stages"]["load"] = {"rows": len(df), "files": len(csv_files)}
+    print(f"  Total: {len(df)} rows, {len(df.columns)} columns")
+    
+    # 2. Validate
+    print("\n[2/5] Validating data...")
+    df_valid, df_quarantine, validate_stats = validate_data(df)
+    save_stage_output(df_valid, "01_validate", validate_stats)
+    result["stages"]["validate"] = validate_stats
+    print(f"  Valid: {validate_stats['rows_valid']}, Quarantined: {validate_stats['rows_quarantined']}")
+    
+    # 3. Transform
+    print("\n[3/5] Transforming data...")
+    df_transformed, transform_stats = transform_data(df_valid)
+    save_stage_output(df_transformed, "02_transform", transform_stats)
+    result["stages"]["transform"] = transform_stats
+    print(f"  Transforms: {len(transform_stats['transforms_applied'])}")
+    
+    # 4. Enrich
+    print("\n[4/5] Enriching data...")
+    df_enriched, enrich_stats = enrich_data(df_transformed, source_label=f"pipeline-{run_id}")
+    save_stage_output(df_enriched, "03_enrich", enrich_stats)
+    result["stages"]["enrich"] = enrich_stats
+    print(f"  Fields added: {enrich_stats['fields_added']}")
+    
+    # 5. Sample
+    print(f"\n[5/5] Stratified sampling ({sample_pct*100}% by role)...")
+    df_sampled, sample_stats = stratified_sample(df_enriched, sample_pct=sample_pct, seed=seed)
+    save_stage_output(df_sampled, "04_sample", sample_stats)
+    result["stages"]["sample"] = {
+        "rows_in": sample_stats["rows_in"],
+        "rows_out": sample_stats["rows_out"],
+        "reduction_pct": sample_stats["reduction_pct"]
+    }
+    print(f"  {sample_stats['rows_in']} → {sample_stats['rows_out']} rows ({sample_stats['reduction_pct']}% reduction)")
+    
+    # 6. Build cache
+    if not skip_cache:
+        print("\n[6/6] Building SQLite cache...")
+        cache_result = build_cache(df_sampled, source=f"{sample_pct*100}% stratified sample")
+        result["cache"] = cache_result
+        if cache_result.get("ok"):
+            print(f"  Cache: {cache_result['rows']} rows, {cache_result['path']}")
+        else:
+            print(f"  Cache error: {cache_result.get('message')}")
+    
+    result["finished_at"] = datetime.now(timezone.utc).isoformat()
+    result["ok"] = True
+    
+    print(f"\n{'='*60}")
+    print(f"Pipeline completed: {result['run_id']}")
+    print(f"{'='*60}\n")
+    
+    # Save run summary
+    summary_path = STAGE_DIR / f"run_{run_id}.json"
+    with open(summary_path, "w") as f:
+        json.dump(result, f, indent=2, default=str)
+    print(f"Run summary: {summary_path}")
+    
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Data pipeline: validate → transform → enrich → sample → cache"
+    )
+    parser.add_argument(
+        "--input", "-i",
+        required=True,
+        help="Path to CSV file or directory containing CSVs"
+    )
+    parser.add_argument(
+        "--sample-pct",
+        type=float,
+        default=SAMPLE_PCT * 100,
+        help=f"Sample percentage (default: {SAMPLE_PCT * 100})"
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=RANDOM_SEED,
+        help=f"Random seed (default: {RANDOM_SEED})"
+    )
+    parser.add_argument(
+        "--skip-cache",
+        action="store_true",
+        help="Skip building SQLite cache"
+    )
+    args = parser.parse_args()
+    
+    sample_pct = args.sample_pct / 100.0
+    if sample_pct <= 0 or sample_pct > 1:
+        print("Error: --sample-pct must be in (0, 100]")
+        sys.exit(1)
+    
+    result = run_pipeline(
+        input_path=args.input,
+        sample_pct=sample_pct,
+        seed=args.seed,
+        skip_cache=args.skip_cache
+    )
+    
+    if not result.get("ok"):
+        sys.exit(1)
+    
+    # Print cache stats
+    stats = get_cache_stats()
+    if stats.get("exists"):
+        print(f"\nCache stats:")
+        print(f"  Rows: {stats['rows']}")
+        print(f"  Size: {stats['size_mb']} MB")
+        print(f"  Years: {stats['years']}")
+
+
+if __name__ == "__main__":
+    main()
