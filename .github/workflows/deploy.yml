@@ -140,14 +140,14 @@ jobs:
           
           ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
             # Check if data exists in S3
-            if aws s3 ls s3://${S3_BUCKET}/survey_data/ --region ${REGION} 2>/dev/null | grep -q "\.csv"; then
-              echo "Found CSV files in S3, running data pipeline..."
+            if aws s3 ls s3://${S3_BUCKET}/survey_data/ --region ${REGION} 2>/dev/null | grep -qE "\.(csv|zip)"; then
+              echo "Found CSV or ZIP files in S3, running data pipeline..."
               
               # Create data directory
               mkdir -p /tmp/survey_data
               
-              # Download CSV files from S3
-              aws s3 sync s3://${S3_BUCKET}/survey_data/ /tmp/survey_data/ --region ${REGION} --exclude "*" --include "*.csv"
+              # Download CSV and ZIP files from S3 (pipeline extracts zips automatically)
+              aws s3 sync s3://${S3_BUCKET}/survey_data/ /tmp/survey_data/ --region ${REGION} --exclude "*" --include "*.csv" --include "*.zip"
               
               # Run pipeline inside the container
               sudo docker exec survey-qa python -m data_pipeline.run_pipeline \

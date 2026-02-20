@@ -7,14 +7,17 @@ Sample runs first to reduce data volume before resource-intensive stages.
 Usage:
     python run_pipeline.py --input /path/to/survey_data
     python run_pipeline.py --input data.csv --sample-pct 5 --seed 42
+    python run_pipeline.py --input survey.zip   # extracts and uses CSVs inside
 """
 import argparse
 import json
 import os
 import sys
+import tempfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 import pandas as pd
 
@@ -28,14 +31,46 @@ except ImportError:
     from .cache import build_cache, get_cache_stats
 
 
-def discover_csv_files(input_path: str) -> List[Path]:
-    """Find CSV files in input path (file or directory)."""
+def discover_csv_files(
+    input_path: str,
+    extract_dir: Optional[Path] = None,
+) -> List[Path]:
+    """
+    Find CSV files in input path (file or directory).
+    Supports .csv files and .zip archives (extracts and uses CSVs inside).
+    """
     p = Path(input_path)
-    if p.is_file() and p.suffix.lower() == ".csv":
-        return [p]
-    if p.is_dir():
-        return sorted(p.glob("**/*.csv"))
-    return []
+    csv_paths: List[Path] = []
+
+    if p.is_file():
+        if p.suffix.lower() == ".csv":
+            return [p]
+        if p.suffix.lower() == ".zip":
+            extract_dir = extract_dir or Path(tempfile.mkdtemp())
+            extract_to = extract_dir / p.stem
+            extract_to.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(p, "r") as z:
+                z.extractall(extract_to)
+            return sorted(extract_to.rglob("*.csv"))
+        return []
+
+    if not p.is_dir():
+        return []
+
+    # Directory: collect CSVs and extract any zips
+    csv_paths = list(p.rglob("*.csv"))
+
+    if extract_dir is None:
+        extract_dir = Path(tempfile.mkdtemp())
+
+    for zip_path in p.rglob("*.zip"):
+        extract_to = extract_dir / zip_path.stem
+        extract_to.mkdir(parents=True, exist_ok=True)
+        with zipfile.ZipFile(zip_path, "r") as z:
+            z.extractall(extract_to)
+        csv_paths.extend(extract_to.rglob("*.csv"))
+
+    return sorted(set(csv_paths))
 
 
 def load_data(csv_files: List[Path]) -> pd.DataFrame:
@@ -100,16 +135,17 @@ def run_pipeline(
     print(f"Data Pipeline Run: {run_id}")
     print(f"{'='*60}")
     
-    # 1. Load data
+    # 1. Load data (supports .csv and .zip; zips are extracted to a temp dir)
     print("\n[1/6] Loading data...")
-    csv_files = discover_csv_files(input_path)
-    if not csv_files:
-        result["error"] = f"No CSV files found in {input_path}"
-        print(f"  ERROR: {result['error']}")
-        return result
-    
-    print(f"  Found {len(csv_files)} CSV file(s)")
-    df = load_data(csv_files)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        csv_files = discover_csv_files(input_path, extract_dir=Path(tmpdir))
+        if not csv_files:
+            result["error"] = f"No CSV files found in {input_path} (looked for .csv and .zip)"
+            print(f"  ERROR: {result['error']}")
+            return result
+
+        print(f"  Found {len(csv_files)} CSV file(s)")
+        df = load_data(csv_files)
     if df.empty:
         result["error"] = "No data loaded"
         return result

@@ -63,17 +63,18 @@ jobs:
             TEMP_DIR=\$(mktemp -d)
             echo "Downloading files from S3..."
             
-            # Download CSV files from S3
-            aws s3 sync "${S3_PATH}" "\${TEMP_DIR}/" --region ${REGION} --exclude "*" --include "*.csv"
+            # Download CSV and ZIP files from S3 (pipeline supports both; zips are extracted automatically)
+            aws s3 sync "${S3_PATH}" "\${TEMP_DIR}/" --region ${REGION} --exclude "*" --include "*.csv" --include "*.zip"
             
-            # Check if files were downloaded
-            CSV_COUNT=\$(find "\${TEMP_DIR}" -name "*.csv" | wc -l)
-            if [ "\${CSV_COUNT}" -eq 0 ]; then
-              echo "ERROR: No CSV files found in ${S3_PATH}"
+            # Check if any data files were downloaded
+            CSV_COUNT=\$(find "\${TEMP_DIR}" -name "*.csv" 2>/dev/null | wc -l)
+            ZIP_COUNT=\$(find "\${TEMP_DIR}" -name "*.zip" 2>/dev/null | wc -l)
+            if [ "\${CSV_COUNT}" -eq 0 ] && [ "\${ZIP_COUNT}" -eq 0 ]; then
+              echo "ERROR: No CSV or ZIP files found in ${S3_PATH}"
               exit 1
             fi
             
-            echo "Found \${CSV_COUNT} CSV file(s)"
+            echo "Found \${CSV_COUNT} CSV file(s), \${ZIP_COUNT} ZIP file(s)"
             
             # Run pipeline inside the container
             echo "Running pipeline..."
