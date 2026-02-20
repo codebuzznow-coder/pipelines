@@ -6,7 +6,10 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 
-from .config import get_cache_path
+try:
+    from config import get_cache_path
+except ImportError:
+    from .config import get_cache_path
 
 DATA_TABLE = "survey_data"
 META_TABLE = "cache_meta"
