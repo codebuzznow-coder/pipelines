@@ -170,7 +170,7 @@ def render_login_page():
                         st.code("APP_USERNAME=your_username\nAPP_PASSWORD=your_secure_password", language="bash")
                 elif check_login(username, password):
                     st.session_state["authenticated"] = True
-                    st.session_state["login_username"] = username.strip()
+                    st.session_state["authenticated_username"] = username.strip()
                     st.success("Signed in successfully.")
                     st.rerun()
                 else:
