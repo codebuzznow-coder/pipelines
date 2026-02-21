@@ -229,23 +229,50 @@ def render_data_pipeline():
                     with open(file_path, "wb") as f:
                         f.write(uploaded_file.getbuffer())
                 
-                # Show progress
+                # Show progress and live log
                 progress_bar = st.progress(0)
                 status_text = st.empty()
+                log_placeholder = st.empty()
+                log_lines = []
+                
+                def _stage_progress(msg: str) -> int:
+                    if "[1/6]" in msg:
+                        return 16
+                    if "[2/6]" in msg:
+                        return 33
+                    if "[3/6]" in msg:
+                        return 50
+                    if "[4/6]" in msg:
+                        return 66
+                    if "[5/6]" in msg:
+                        return 83
+                    if "[6/6]" in msg:
+                        return 95
+                    return None
+                
+                def log_callback(msg: str):
+                    log_lines.append(msg)
+                    pct = _stage_progress(msg)
+                    if pct is not None:
+                        progress_bar.progress(pct)
+                    with log_placeholder.container():
+                        st.code("\n".join(log_lines), language=None)
                 
                 try:
                     status_text.text("Starting pipeline...")
-                    progress_bar.progress(10)
+                    progress_bar.progress(5)
                     
-                    # Run pipeline
+                    # Run pipeline with live log
                     result = run_pipeline(
                         input_path=str(tmp_path),
                         sample_pct=sample_pct / 100.0,
                         seed=int(seed),
-                        skip_cache=False
+                        skip_cache=False,
+                        log_callback=log_callback,
                     )
                     
                     progress_bar.progress(100)
+                    status_text.empty()
                     
                     if result.get("ok"):
                         st.success("✅ Pipeline completed successfully!")

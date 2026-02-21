@@ -17,7 +17,7 @@ import tempfile
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Callable
 
 import pandas as pd
 
@@ -73,8 +73,12 @@ def discover_csv_files(
     return sorted(set(csv_paths))
 
 
-def load_data(csv_files: List[Path]) -> pd.DataFrame:
+def load_data(
+    csv_files: List[Path],
+    log: Optional[Callable[[str], None]] = None,
+) -> pd.DataFrame:
     """Load and concatenate CSV files, adding survey_year from filename."""
+    _log = log if log else (lambda msg: print(msg))
     frames = []
     for f in csv_files:
         try:
@@ -85,9 +89,9 @@ def load_data(csv_files: List[Path]) -> pd.DataFrame:
             if match and "survey_year" not in df.columns:
                 df["survey_year"] = match.group(1)
             frames.append(df)
-            print(f"  Loaded {f.name}: {len(df)} rows")
+            _log(f"  Loaded {f.name}: {len(df)} rows")
         except Exception as e:
-            print(f"  Error loading {f.name}: {e}")
+            _log(f"  Error loading {f.name}: {e}")
     
     if not frames:
         return pd.DataFrame()
@@ -111,14 +115,22 @@ def run_pipeline(
     input_path: str,
     sample_pct: float = SAMPLE_PCT,
     seed: int = RANDOM_SEED,
-    skip_cache: bool = False
+    skip_cache: bool = False,
+    log_callback: Optional[Callable[[str], None]] = None,
 ) -> Dict[str, Any]:
     """
     Run the full data pipeline.
     
+    If log_callback is provided, it will be called with each log line (for UI progress).
+    
     Returns:
         Pipeline run summary
     """
+    def log(msg: str = "") -> None:
+        print(msg)
+        if log_callback:
+            log_callback(msg)
+
     ensure_dirs()
     run_id = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
     
@@ -131,30 +143,30 @@ def run_pipeline(
         "ok": False
     }
     
-    print(f"\n{'='*60}")
-    print(f"Data Pipeline Run: {run_id}")
-    print(f"{'='*60}")
+    log(f"\n{'='*60}")
+    log(f"Data Pipeline Run: {run_id}")
+    log(f"{'='*60}")
     
     # 1. Load data (supports .csv and .zip; zips are extracted to a temp dir)
-    print("\n[1/6] Loading data...")
+    log("\n[1/6] Loading data...")
     with tempfile.TemporaryDirectory() as tmpdir:
         csv_files = discover_csv_files(input_path, extract_dir=Path(tmpdir))
         if not csv_files:
             result["error"] = f"No CSV files found in {input_path} (looked for .csv and .zip)"
-            print(f"  ERROR: {result['error']}")
+            log(f"  ERROR: {result['error']}")
             return result
 
-        print(f"  Found {len(csv_files)} CSV file(s)")
-        df = load_data(csv_files)
+        log(f"  Found {len(csv_files)} CSV file(s)")
+        df = load_data(csv_files, log=log)
     if df.empty:
         result["error"] = "No data loaded"
         return result
     
     result["stages"]["load"] = {"rows": len(df), "files": len(csv_files)}
-    print(f"  Total: {len(df)} rows, {len(df.columns)} columns")
+    log(f"  Total: {len(df)} rows, {len(df.columns)} columns")
     
     # 2. Sample first (reduce volume before heavy stages)
-    print(f"\n[2/6] Stratified sampling ({sample_pct*100}% by role)...")
+    log(f"\n[2/6] Stratified sampling ({sample_pct*100}% by role)...")
     df_sampled, sample_stats = stratified_sample(df, sample_pct=sample_pct, seed=seed)
     save_stage_output(df_sampled, "01_sample", sample_stats)
     result["stages"]["sample"] = {
@@ -162,51 +174,51 @@ def run_pipeline(
         "rows_out": sample_stats["rows_out"],
         "reduction_pct": sample_stats["reduction_pct"]
     }
-    print(f"  {sample_stats['rows_in']} → {sample_stats['rows_out']} rows ({sample_stats['reduction_pct']}% reduction)")
+    log(f"  {sample_stats['rows_in']} → {sample_stats['rows_out']} rows ({sample_stats['reduction_pct']}% reduction)")
     
     # 3. Validate
-    print("\n[3/6] Validating data...")
+    log("\n[3/6] Validating data...")
     df_valid, df_quarantine, validate_stats = validate_data(df_sampled)
     save_stage_output(df_valid, "02_validate", validate_stats)
     result["stages"]["validate"] = validate_stats
-    print(f"  Valid: {validate_stats['rows_valid']}, Quarantined: {validate_stats['rows_quarantined']}")
+    log(f"  Valid: {validate_stats['rows_valid']}, Quarantined: {validate_stats['rows_quarantined']}")
     
     # 4. Transform
-    print("\n[4/6] Transforming data...")
+    log("\n[4/6] Transforming data...")
     df_transformed, transform_stats = transform_data(df_valid)
     save_stage_output(df_transformed, "03_transform", transform_stats)
     result["stages"]["transform"] = transform_stats
-    print(f"  Transforms: {len(transform_stats['transforms_applied'])}")
+    log(f"  Transforms: {len(transform_stats['transforms_applied'])}")
     
     # 5. Enrich
-    print("\n[5/6] Enriching data...")
+    log("\n[5/6] Enriching data...")
     df_enriched, enrich_stats = enrich_data(df_transformed, source_label=f"pipeline-{run_id}")
     save_stage_output(df_enriched, "04_enrich", enrich_stats)
     result["stages"]["enrich"] = enrich_stats
-    print(f"  Fields added: {enrich_stats['fields_added']}")
+    log(f"  Fields added: {enrich_stats['fields_added']}")
     
     # 6. Build cache
     if not skip_cache:
-        print("\n[6/6] Building SQLite cache...")
+        log("\n[6/6] Building SQLite cache...")
         cache_result = build_cache(df_enriched, source=f"{sample_pct*100}% stratified sample")
         result["cache"] = cache_result
         if cache_result.get("ok"):
-            print(f"  Cache: {cache_result['rows']} rows, {cache_result['path']}")
+            log(f"  Cache: {cache_result['rows']} rows, {cache_result['path']}")
         else:
-            print(f"  Cache error: {cache_result.get('message')}")
+            log(f"  Cache error: {cache_result.get('message')}")
     
     result["finished_at"] = datetime.now(timezone.utc).isoformat()
     result["ok"] = True
     
-    print(f"\n{'='*60}")
-    print(f"Pipeline completed: {result['run_id']}")
-    print(f"{'='*60}\n")
+    log(f"\n{'='*60}")
+    log(f"Pipeline completed: {result['run_id']}")
+    log(f"{'='*60}\n")
     
     # Save run summary
     summary_path = STAGE_DIR / f"run_{run_id}.json"
     with open(summary_path, "w") as f:
         json.dump(result, f, indent=2, default=str)
-    print(f"Run summary: {summary_path}")
+    log(f"Run summary: {summary_path}")
     
     return result
 
