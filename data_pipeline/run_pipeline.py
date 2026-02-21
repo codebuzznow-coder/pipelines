@@ -112,8 +112,11 @@ def save_stage_output(df: pd.DataFrame, stage_name: str, stats: Dict[str, Any]):
     stage_dir = STAGE_DIR / stage_name
     stage_dir.mkdir(parents=True, exist_ok=True)
     
-    # Save parquet
-    df.to_parquet(stage_dir / "output.parquet", index=False)
+    # Coerce object columns to string so PyArrow can write parquet (mixed types e.g. YearsCode cause ArrowTypeError)
+    out = df.copy()
+    for col in out.select_dtypes(include=["object"]).columns:
+        out[col] = out[col].fillna("").astype(str)
+    out.to_parquet(stage_dir / "output.parquet", index=False)
     
     # Save stats
     with open(stage_dir / "stats.json", "w") as f:
