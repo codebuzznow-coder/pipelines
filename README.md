@@ -225,6 +225,26 @@ python run_pipeline.py --input ../survey_data --sample-pct 5
 ```
 Put your CSV or ZIP files in the `survey_data/` folder at the project root (or use any path).
 
+### Run App Locally (clean start)
+
+From the **pipeline** directory (the one that contains `app/` and `scripts/`):
+
+```bash
+cd /path/to/pipeline
+./scripts/run_app.sh
+```
+
+This script: goes to the project root, uses a venv if you have one, installs dependencies if needed, and runs the app. Open **http://localhost:8501**. Stop with **Ctrl+C**.
+
+**One-off without the script:**
+
+```bash
+cd /path/to/pipeline
+python3 -m streamlit run app/app.py --server.port 8501
+```
+
+(If `streamlit` is not found, run `pip3 install -r app/requirements.txt` first.)
+
 ### Run App Locally with Docker Compose
 
 ```bash
