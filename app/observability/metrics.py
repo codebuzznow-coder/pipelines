@@ -69,7 +69,43 @@ class MetricsCollector:
             conn.execute("CREATE INDEX IF NOT EXISTS idx_timings_name ON timings(name)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_timings_recorded ON timings(recorded_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_events_type ON events(event_type)")
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS session_heartbeats (
+                    session_id TEXT PRIMARY KEY,
+                    last_seen_at TEXT NOT NULL
+                )
+            """)
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_session_heartbeats_seen ON session_heartbeats(last_seen_at)")
             conn.commit()
+    
+    def record_session_heartbeat(self, session_id: str):
+        """Record that a session is active (call on each request)."""
+        now = datetime.now(timezone.utc).isoformat()
+        with self._lock:
+            with self._get_conn() as conn:
+                conn.execute("""
+                    INSERT INTO session_heartbeats (session_id, last_seen_at) VALUES (?, ?)
+                    ON CONFLICT(session_id) DO UPDATE SET last_seen_at = ?
+                """, (session_id, now, now))
+                conn.commit()
+    
+    def get_active_user_count(self, minutes: int = 5) -> int:
+        """Count distinct sessions with a heartbeat in the last N minutes."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+        with self._get_conn() as conn:
+            cur = conn.execute(
+                "SELECT COUNT(DISTINCT session_id) FROM session_heartbeats WHERE last_seen_at > ?",
+                (cutoff,)
+            )
+            return cur.fetchone()[0] or 0
+    
+    def _cleanup_old_heartbeats(self, minutes: int = 60):
+        """Remove heartbeats older than N minutes to keep table small."""
+        cutoff = (datetime.now(timezone.utc) - timedelta(minutes=minutes)).isoformat()
+        with self._lock:
+            with self._get_conn() as conn:
+                conn.execute("DELETE FROM session_heartbeats WHERE last_seen_at < ?", (cutoff,))
+                conn.commit()
     
     @contextmanager
     def _get_conn(self):
@@ -212,6 +248,7 @@ class MetricsCollector:
                 conn.execute("DELETE FROM timings WHERE recorded_at < ?", (cutoff,))
                 conn.execute("DELETE FROM events WHERE recorded_at < ?", (cutoff,))
                 conn.commit()
+        self._cleanup_old_heartbeats(minutes=60)
 
 
 # Singleton instance

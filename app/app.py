@@ -9,6 +9,7 @@ Optional: add OPENAI_API_KEY=sk-... to app/.env. Do not commit .env; it is in .g
 import os
 import sys
 import time
+import uuid
 from pathlib import Path
 
 # Load .env from project root or app dir (so OPENAI_API_KEY is available without UI)
@@ -90,8 +91,18 @@ def get_role_distribution(df: pd.DataFrame, country_filter: str = None, top_n: i
 
 def render_sidebar():
     """Render sidebar with metrics and info."""
+    # Track active user (one heartbeat per session per run)
+    if "_session_id" not in st.session_state:
+        st.session_state["_session_id"] = uuid.uuid4().hex
+    metrics.record_session_heartbeat(st.session_state["_session_id"])
+
     with st.sidebar:
         st.title("📊 CodeBuzz – Survey Q&A")
+        
+        # Active users (sessions with activity in last 5 min)
+        active_count = metrics.get_active_user_count(minutes=5)
+        st.metric("Active users", active_count)
+        st.caption("Sessions active in last 5 min")
         
         # Data info
         stats = get_cache_stats()
@@ -495,6 +506,12 @@ def render_metrics_dashboard():
     st.header("Observability Dashboard")
     
     m = get_metrics()
+
+    # Active users
+    st.subheader("Active users")
+    active = m.get_active_user_count(minutes=5)
+    st.metric("Sessions active (last 5 min)", active)
+    st.caption("Each browser tab is one session; we count sessions that had activity in the last 5 minutes.")
     
     # Counters
     st.subheader("Counters")
