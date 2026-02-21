@@ -3,7 +3,7 @@
 
 set -e
 
-echo "=== Survey Q&A Startup ==="
+echo "=== CodeBuzz Survey Q&A Startup ==="
 echo "Time: $(date -Iseconds)"
 
 # Sync data from S3 if configured

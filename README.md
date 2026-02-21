@@ -1,6 +1,6 @@
-# Survey Q&A Pipeline
+# CodeBuzz – Survey Q&A Pipeline
 
-A clean, organized pipeline setup for deploying the Survey Q&A application on AWS. Includes infrastructure provisioning (Terraform), data pipeline (5% stratified sampling), and application deployment with CI/CD via GitHub Actions.
+A clean, organized pipeline setup for deploying the CodeBuzz Survey Q&A application on AWS. Includes infrastructure provisioning (Terraform), data pipeline (5% stratified sampling), and application deployment with CI/CD via GitHub Actions.
 
 ## Project Structure
 

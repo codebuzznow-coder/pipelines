@@ -7,7 +7,7 @@ set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-echo "=== Survey Q&A Pipeline Setup ==="
+echo "=== CodeBuzz Survey Q&A Pipeline Setup ==="
 
 # Check prerequisites
 echo ""

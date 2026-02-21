@@ -1,4 +1,4 @@
-# Survey Q&A Application
+# CodeBuzz - Survey Q&A Application
 FROM python:3.11-slim
 
 ENV PYTHONUNBUFFERED=1 \

@@ -10,7 +10,7 @@ cd "$ROOT"
 SURVEY_DATA="${1:-$ROOT/survey_data}"
 
 echo "============================================================"
-echo "Survey Q&A - Full Pipeline Run"
+echo "CodeBuzz Survey Q&A - Full Pipeline Run"
 echo "============================================================"
 echo "Survey data: $SURVEY_DATA"
 echo ""

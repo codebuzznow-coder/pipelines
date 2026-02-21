@@ -1,6 +1,6 @@
 resource "aws_security_group" "app" {
   name        = "survey-qa-${var.environment}-sg"
-  description = "Security group for Survey Q&A application"
+  description = "Security group for CodeBuzz Survey Q&A application"
 
   ingress {
     description = "SSH"

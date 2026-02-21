@@ -1,5 +1,5 @@
 """
-Survey Q&A Application - Clean, minimal version with observability.
+CodeBuzz - Survey Q&A Application. Clean, minimal version with observability.
 
 Usage:
     streamlit run app.py
@@ -24,7 +24,7 @@ metrics = get_metrics()
 
 # Page config
 st.set_page_config(
-    page_title="Survey Q&A",
+    page_title="CodeBuzz - Survey Q&A",
     page_icon="📊",
     layout="wide",
 )
@@ -77,7 +77,7 @@ def get_role_distribution(df: pd.DataFrame, country_filter: str = None, top_n: i
 def render_sidebar():
     """Render sidebar with metrics and info."""
     with st.sidebar:
-        st.title("📊 Survey Q&A")
+        st.title("📊 CodeBuzz – Survey Q&A")
         
         # Data info
         stats = get_cache_stats()
@@ -89,7 +89,7 @@ def render_sidebar():
             st.warning("No data cache found. Use the **Data Pipeline** tab below to upload and run, or run the GitHub workflow with your S3 path.")
         
         if st.button("🔄 Refresh data", key="sidebar_refresh_data"):
-            load_data.clear()
+            st.session_state["_cache_key"] = st.session_state.get("_cache_key", 0) + 1
             st.rerun()
         
         st.divider()
@@ -130,7 +130,8 @@ def render_visualization():
         st.caption("If you just ran the pipeline (e.g. via GitHub Action), click **Refresh data** in the sidebar to reload the cache.")
         return
     
-    df, _ = load_data()
+    cache_key = st.session_state.get("_cache_key", 0)
+    df, _ = load_data(_cache_key=cache_key)
     if df is None or df.empty:
         st.error("Failed to load data from cache.")
         return
@@ -295,12 +296,14 @@ def render_data_pipeline():
                         
                         if result.get("cache", {}).get("ok"):
                             st.success(f"✅ Cache built: {result['cache']['rows']:,} rows")
+                            # Bump cache key so Visualization will re-read from disk when user switches tabs
+                            st.session_state["_cache_key"] = st.session_state.get("_cache_key", 0) + 1
                         
                         # Show stage details
                         with st.expander("View Stage Details"):
                             st.json(result)
                         
-                        st.info("🔄 Refresh the page to see the new data in Visualization")
+                        st.info("🔄 Switch to **Visualization** in the sidebar to see the data.")
                         
                     else:
                         st.error(f"❌ Pipeline failed: {result.get('error', 'Unknown error')}")
@@ -402,7 +405,7 @@ def main():
     
     # Footer
     st.divider()
-    st.caption("Survey Q&A | Metrics persist across restarts")
+    st.caption("CodeBuzz – Survey Q&A | Metrics persist across restarts")
 
 
 if __name__ == "__main__":
