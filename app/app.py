@@ -4,8 +4,7 @@ CodeBuzz - Survey Q&A Application. Clean, minimal version with observability.
 Usage:
     streamlit run app.py
 
-Optional: copy .env from data_to_decisions (or create .env) with OPENAI_API_KEY=sk-...
-Do not commit .env; it is in .gitignore.
+Optional: add OPENAI_API_KEY=sk-... to app/.env. Do not commit .env; it is in .gitignore.
 """
 import os
 import sys
@@ -166,9 +165,9 @@ def render_visualization():
             "OpenAI API key",
             value=st.session_state.get("openai_api_key", ""),
             type="password",
-            placeholder="sk-..." if not (env_key or secret_key) else "•••••••• (from .env or secrets)",
+            placeholder="sk-..." if not (env_key or secret_key) else "•••••••• (from app/.env)",
             key="openai_api_key_input",
-            help="Optional. Or copy .env from data_to_decisions (OPENAI_API_KEY=...) or set in Streamlit secrets.",
+            help="Optional. Or add OPENAI_API_KEY to app/.env.",
         )
         if openai_key:
             st.session_state["openai_api_key"] = openai_key.strip()
@@ -177,7 +176,7 @@ def render_visualization():
         # Effective key: UI > .env > Streamlit secrets (never show secret in UI)
         effective_api_key = (st.session_state.get("openai_api_key") or env_key or secret_key).strip()
         if use_openai and not effective_api_key:
-            st.caption("Enter an API key above, or copy .env from data_to_decisions, or set OPENAI_API_KEY in Streamlit secrets.")
+            st.caption("Enter an API key above, or add OPENAI_API_KEY to app/.env.")
         if effective_api_key:
             if st.button("Test API", key="test_openai_btn"):
                 ok, msg = test_openai_api(effective_api_key)
