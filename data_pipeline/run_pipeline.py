@@ -78,7 +78,7 @@ def load_data(
     log: Optional[Callable[[str], None]] = None,
 ) -> pd.DataFrame:
     """Load and concatenate CSV files, adding survey_year from filename."""
-    _log = log if log else (lambda msg: print(msg))
+    _log = log if log else (lambda msg: print(msg, flush=True))
     frames = []
     for f in csv_files:
         try:
@@ -127,7 +127,7 @@ def run_pipeline(
         Pipeline run summary
     """
     def log(msg: str = "") -> None:
-        print(msg)
+        print(msg, flush=True)
         if log_callback:
             log_callback(msg)
 

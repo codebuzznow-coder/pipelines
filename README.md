@@ -182,6 +182,8 @@ Replace `<EC2_PUBLIC_IP>` with the IP from Step 3.
 - **From the app:** Open http://YOUR_EC2_IP:8501 → **Data Pipeline** in the sidebar → upload CSV/ZIP files → Run Pipeline.
 - **Locally:** `cd data_pipeline && pip install -r ../app/requirements.txt && python run_pipeline.py --input ../survey_data` (put CSV or ZIP files in `survey_data/` first).
 
+**Pipeline duration:** On a t3.micro with 10+ Stack Overflow survey CSVs, a full run can take **15–45 minutes** (load → sample → validate → transform → enrich → cache). Use a smaller **sample %** (e.g. 1–2%) in the workflow for faster runs (~5–15 min).
+
 ## Local Development (Optional)
 
 ### Run Data Pipeline Locally
