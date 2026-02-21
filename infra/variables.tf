@@ -37,7 +37,7 @@ variable "allowed_cidr" {
 variable "allowed_ssh_cidr" {
   description = "Deprecated: Use allowed_cidr instead"
   type        = string
-  default     = "173.66.55.228/32"
+  default     = "0.0.0.0/0"
 }
 
 variable "s3_bucket_prefix" {
