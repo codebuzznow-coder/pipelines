@@ -28,6 +28,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from data_pipeline.cache import read_cache, get_cache_stats, cache_exists
 from data_pipeline.run_pipeline import run_pipeline
+from data_pipeline.validations import run_all_validations
+from data_pipeline.evals import run_all_evals
 from observability import get_metrics
 from query_parsing import parse_query_with_openai, parse_query_keyword, test_openai_api
 
@@ -127,7 +129,7 @@ def render_sidebar():
         st.subheader("Navigation")
         return st.radio(
             "Section",
-            ["Visualization", "Data Pipeline", "Metrics Dashboard"],
+            ["Visualization", "Data Pipeline", "Validations & Evals", "Metrics Dashboard"],
             label_visibility="collapsed"
         )
 
@@ -414,6 +416,80 @@ def render_data_pipeline():
         st.info("No cache found. Upload and process data to create a cache.")
 
 
+def render_validations_evals():
+    """Validations and evals report with graphs."""
+    st.header("Validations & Evals")
+    st.caption("Runs cache/data validations and query/data evals. Same logic as `python scripts/run_validations_evals.py`.")
+
+    min_rows = st.number_input("Min rows (validations)", value=1, min_value=1, key="ve_min_rows")
+    openai_key = (os.environ.get("OPENAI_API_KEY") or st.session_state.get("openai_api_key") or "").strip()
+    if st.button("Run Validations & Evals", type="primary"):
+        with st.spinner("Running validations and evals..."):
+            v_results = run_all_validations(min_rows=int(min_rows))
+            e_results = run_all_evals(openai_api_key=openai_key or None)
+
+        v_passed = sum(1 for r in v_results if r.get("passed"))
+        v_total = len(v_results)
+        eval_scores = [r.get("score", 0) for r in e_results]
+        avg_eval = (sum(eval_scores) / len(eval_scores) * 100) if eval_scores else 0
+
+        # Summary metrics
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Validations passed", f"{v_passed}/{v_total}")
+        with col2:
+            st.metric("Evals average", f"{avg_eval:.0f}%")
+        with col3:
+            st.metric("Status", "All passed" if v_passed == v_total else "Some failed")
+
+        # Graph: Validations (pass/fail per check)
+        st.subheader("Validations")
+        v_df = pd.DataFrame([
+            {"Validation": r["name"], "Passed": 1 if r.get("passed") else 0, "Status": "Pass" if r.get("passed") else "Fail"}
+            for r in v_results
+        ])
+        st.bar_chart(v_df.set_index("Validation")[["Passed"]], color="#28a745")
+        for r in v_results:
+            icon = "✓" if r.get("passed") else "✗"
+            st.caption(f"{icon} **{r['name']}**: {r['message']}")
+
+        # Graph: Eval scores
+        st.subheader("Eval scores")
+        e_df = pd.DataFrame([
+            {"Eval": r["name"], "Score %": round(r.get("score", 0) * 100)}
+            for r in e_results
+        ])
+        st.bar_chart(e_df.set_index("Eval")[["Score %"]], color="#17a2b8")
+        for r in e_results:
+            pct = r.get("score", 0) * 100
+            st.caption(f"**{r['name']}**: {r['message']} ({pct:.0f}%)")
+
+        # JSON report download
+        import json
+        from datetime import datetime, timezone
+        report = {
+            "run_at": datetime.now(timezone.utc).isoformat(),
+            "validations": {"passed": v_passed, "total": v_total, "all_passed": v_passed == v_total, "results": v_results},
+            "evals": {"results": e_results, "average_score": sum(eval_scores) / len(eval_scores) if eval_scores else 0},
+        }
+        st.download_button(
+            "Download report (JSON)",
+            data=json.dumps(report, indent=2, default=str),
+            file_name=f"validations_evals_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json",
+            mime="application/json",
+            key="ve_download",
+        )
+        return
+
+    # Where to run from CLI
+    with st.expander("Where are validations and evals defined?"):
+        st.markdown("""
+        - **Validations:** `data_pipeline/validations.py` — cache exists, readable, required columns, min rows, metadata, key columns non-empty.
+        - **Evals:** `data_pipeline/evals.py` — keyword query parsing, data coverage, role spread, optional OpenAI parsing.
+        - **CLI:** From project root: `python scripts/run_validations_evals.py` or `python scripts/run_validations_evals.py --json report.json`
+        """)
+
+
 def render_metrics_dashboard():
     """Metrics and observability dashboard."""
     st.header("Observability Dashboard")
@@ -475,6 +551,8 @@ def main():
         render_visualization()
     elif nav == "Data Pipeline":
         render_data_pipeline()
+    elif nav == "Validations & Evals":
+        render_validations_evals()
     elif nav == "Metrics Dashboard":
         render_metrics_dashboard()
     

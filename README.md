@@ -18,6 +18,8 @@ pipeline/
 ├── data_pipeline/          # Data processing pipeline
 │   ├── stages/             # sample → validate → transform → enrich
 │   ├── run_pipeline.py     # CLI entry point
+│   ├── validations.py      # Cache/data validations (used by UI & CLI)
+│   ├── evals.py            # Query + data evals (used by UI & CLI)
 │   └── tests/
 │
 ├── app/                    # Streamlit application
@@ -31,8 +33,13 @@ pipeline/
 │   └── github_actions/
 │       └── deploy.yml      # CI/CD workflow
 │
+├── .github/workflows/      # GitHub Actions
+│   ├── deploy.yml          # Build image, deploy to EC2
+│   └── run-pipeline.yml    # Run data pipeline on EC2 (S3 → container)
+│
 ├── docs/                   # Documentation
 └── scripts/                # Setup scripts
+│   └── run_validations_evals.py   # Validations & evals CLI (report + optional --json)
 ```
 
 ---
