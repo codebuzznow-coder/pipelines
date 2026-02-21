@@ -14,17 +14,28 @@ import hmac
 from pathlib import Path
 
 # Load .env from app dir first, then project root (so OPENAI_API_KEY and APP_USERNAME/APP_PASSWORD are set)
+_APP_DIR = Path(__file__).resolve().parent
 try:
     from dotenv import load_dotenv
-    _app_dir = Path(__file__).resolve().parent
-    _root = _app_dir.parent
-    # App .env takes precedence (override=True); load from both possible locations
-    load_dotenv(_app_dir / ".env", override=True)
-    load_dotenv(_root / ".env")
-    # If run from project root with "streamlit run app/app.py", cwd may differ; try cwd/app/.env
+    load_dotenv(_APP_DIR / ".env", override=True)
+    load_dotenv(_APP_DIR.parent / ".env")
     load_dotenv(Path.cwd() / "app" / ".env", override=True)
 except ImportError:
     pass
+# Ensure APP_USERNAME/APP_PASSWORD are in os.environ at startup (read file directly if needed)
+if not os.environ.get("APP_USERNAME") or not os.environ.get("APP_PASSWORD"):
+    _env_path = _APP_DIR / ".env"
+    if _env_path.exists():
+        try:
+            for line in _env_path.read_text(encoding="utf-8-sig", errors="ignore").splitlines():
+                line = line.strip()
+                if line and not line.startswith("#") and "=" in line:
+                    k, v = line.split("=", 1)
+                    k, v = k.strip(), v.strip().strip('"').strip("'")
+                    if k in ("APP_USERNAME", "APP_PASSWORD") and v:
+                        os.environ.setdefault(k, v)
+        except Exception:
+            pass
 
 import streamlit as st
 import pandas as pd
@@ -87,14 +98,11 @@ def _read_env_file(path: Path) -> dict:
 
 def _env_file_paths() -> list:
     """Return candidate paths for app/.env (tries multiple locations)."""
-    base = Path(__file__).resolve().parent
-    root = base.parent
-    cwd = Path.cwd()
     return [
-        base / ".env",           # app/.env next to app.py
-        root / "app" / ".env",   # project_root/app/.env
-        cwd / "app" / ".env",    # cwd/app/.env (e.g. run from project root)
-        cwd / ".env",            # cwd/.env
+        _APP_DIR / ".env",           # app/.env next to app.py (most reliable)
+        _APP_DIR.parent / "app" / ".env",
+        Path.cwd() / "app" / ".env",
+        Path.cwd() / ".env",
     ]
 
 
