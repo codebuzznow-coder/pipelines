@@ -240,6 +240,7 @@ aws ecr delete-repository --repository-name survey-qa --region us-east-1 --force
 - **Correct:** `s3://survey-qa-data-301625833185/survey_data/` (use your bucket name and the folder that contains your CSV/ZIP files)
 
 ### Run Data Pipeline: "No CSV or ZIP at s3://... EC2 instance may need IAM access"
+- **Quick fix (grant EC2 access to the bucket):** In `infra/terraform.tfvars` add (use your bucket name): `ec2_additional_s3_bucket_arns = ["arn:aws:s3:::survey-qa-data-301625833185"]`. Run `cd infra && terraform apply`. Then confirm the EC2 instance has the IAM role: AWS Console → EC2 → instance → **Security** → **IAM role** (e.g. `survey-qa-demo-role`). If empty, attach that role and re-run the workflow.
 - **Files location:** The workflow syncs the **prefix** you give (e.g. `survey_data/`). Upload CSV or ZIP files **under that prefix** (e.g. `s3://your-bucket/survey_data/2024.csv` or `survey_data/files.zip`). If the prefix is empty or has no `.csv`/`.zip`, you’ll see this error.
 - **EC2 IAM:** The EC2 instance needs the IAM role that has S3 access. If you used this repo’s Terraform, the instance profile is attached. Verify: AWS Console → EC2 → your instance → **Security** → **IAM role** (e.g. `survey-qa-demo-role`). If there is no role, re-run `terraform apply` or attach the role `survey-qa-<env>-role` to the instance.
 - **Bucket not created by Terraform:** If the bucket (e.g. `survey-qa-data-301625833185`) was created outside this Terraform, add its ARN so the EC2 role can access it. In `infra/terraform.tfvars`:  
