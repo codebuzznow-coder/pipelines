@@ -4,8 +4,9 @@
 aws_region       = "us-east-1"
 environment      = "demo"
 instance_type    = "t3.micro"
-key_name         = "pipeline_demo"       # SSH key name (must exist in AWS)
-#allowed_ssh_cidr = "0.0.0.0/0"        # Restrict to your IP for security
+key_name         = "codebuzz_kp"       # SSH key name (must exist in AWS)
+# Allow SSH and app from anywhere (required for GitHub Actions to deploy / run pipeline)
+allowed_cidr     = "0.0.0.0/0"
 app_port         = 8501
 s3_bucket_prefix = "survey-qa-data"
 
