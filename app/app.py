@@ -3,11 +3,23 @@ CodeBuzz - Survey Q&A Application. Clean, minimal version with observability.
 
 Usage:
     streamlit run app.py
+
+Optional: copy .env from data_to_decisions (or create .env) with OPENAI_API_KEY=sk-...
+Do not commit .env; it is in .gitignore.
 """
 import os
 import sys
 import time
 from pathlib import Path
+
+# Load .env from project root or app dir (so OPENAI_API_KEY is available without UI)
+try:
+    from dotenv import load_dotenv
+    _root = Path(__file__).resolve().parent.parent
+    load_dotenv(_root / ".env")
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass
 
 import streamlit as st
 import pandas as pd
@@ -18,6 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from data_pipeline.cache import read_cache, get_cache_stats, cache_exists
 from data_pipeline.run_pipeline import run_pipeline
 from observability import get_metrics
+from query_parsing import parse_query_with_openai, parse_query_keyword, test_openai_api
 
 # Initialize metrics
 metrics = get_metrics()
@@ -135,6 +148,44 @@ def render_visualization():
         st.error("Failed to load data from cache.")
         return
     
+    # Query settings: optional OpenAI
+    with st.expander("⚙️ Query settings (optional OpenAI)"):
+        use_openai = st.checkbox(
+            "Use OpenAI to interpret questions",
+            value=st.session_state.get("query_use_openai", False),
+            key="query_use_openai",
+            help="Convert your question to filters/parameters via OpenAI. Otherwise keyword parsing is used.",
+        )
+        # API key: from .env, Streamlit secrets, or UI (do not commit .env; it's in .gitignore)
+        env_key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+        try:
+            secret_key = (st.secrets.get("OPENAI_API_KEY") or "").strip()
+        except Exception:
+            secret_key = ""
+        openai_key = st.text_input(
+            "OpenAI API key",
+            value=st.session_state.get("openai_api_key", ""),
+            type="password",
+            placeholder="sk-..." if not (env_key or secret_key) else "•••••••• (from .env or secrets)",
+            key="openai_api_key_input",
+            help="Optional. Or copy .env from data_to_decisions (OPENAI_API_KEY=...) or set in Streamlit secrets.",
+        )
+        if openai_key:
+            st.session_state["openai_api_key"] = openai_key.strip()
+        else:
+            st.session_state["openai_api_key"] = ""
+        # Effective key: UI > .env > Streamlit secrets (never show secret in UI)
+        effective_api_key = (st.session_state.get("openai_api_key") or env_key or secret_key).strip()
+        if use_openai and not effective_api_key:
+            st.caption("Enter an API key above, or copy .env from data_to_decisions, or set OPENAI_API_KEY in Streamlit secrets.")
+        if effective_api_key:
+            if st.button("Test API", key="test_openai_btn"):
+                ok, msg = test_openai_api(effective_api_key)
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error("API test failed: " + msg)
+    
     # Query input
     col1, col2 = st.columns([3, 1])
     with col1:
@@ -144,9 +195,15 @@ def render_visualization():
             label_visibility="collapsed"
         )
     with col2:
-        top_n = st.selectbox("Top N", [5, 10, 15, 20], index=1)
+        default_top_n = st.selectbox("Top N", [5, 10, 15, 20], index=1)
     
-    # Quick examples
+    # How it works
+    with st.expander("ℹ️ How queries work"):
+        st.markdown("""
+        - **With OpenAI (Query settings):** Your question is sent to the API and converted into **structured parameters** (country filter, top N). Then we aggregate from the cached survey data in memory.
+        - **Without OpenAI:** **Keyword parsing** in Python (e.g. *USA* → United States filter). Data is from the **SQLite cache**; results are **aggregated in Python**. No SQL is generated.
+        """)
+    
     st.caption("Examples: Top 5 roles in USA | Top 10 programming languages | Show developer roles")
     
     if query:
@@ -155,11 +212,31 @@ def render_visualization():
         metrics.event("query", query)
         
         try:
-            # Simple query parsing
-            query_lower = query.lower()
             country_filter = None
-            if "usa" in query_lower or "united states" in query_lower:
-                country_filter = "United States"
+            top_n = default_top_n
+            interpretation = ""
+            effective_key = (st.session_state.get("openai_api_key") or os.environ.get("OPENAI_API_KEY") or "").strip()
+            try:
+                effective_key = effective_key or (st.secrets.get("OPENAI_API_KEY") or "").strip()
+            except Exception:
+                pass
+            use_openai_now = use_openai and effective_key
+
+            if use_openai_now:
+                country_filter, top_n, interpretation, err = parse_query_with_openai(
+                    effective_key, query, default_top_n
+                )
+                if err:
+                    st.warning(f"OpenAI parsing failed ({err}). Using keyword fallback.")
+                    country_filter, top_n, interpretation = parse_query_keyword(query, default_top_n)
+                    interpretation = "Keyword fallback: " + interpretation
+                else:
+                    interpretation = "OpenAI: " + (interpretation or "")
+            else:
+                country_filter, top_n, interpretation = parse_query_keyword(query, default_top_n)
+                interpretation = "Keyword: " + interpretation
+
+            st.info("**Query interpretation:** " + interpretation)
             
             # Get results
             results = get_role_distribution(df, country_filter=country_filter, top_n=top_n)

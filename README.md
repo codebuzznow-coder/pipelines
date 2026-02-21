@@ -195,6 +195,18 @@ Open http://YOUR_EC2_IP:8501 → **Data Pipeline** in the sidebar → upload CSV
 
 **Pipeline duration:** On a t3.medium with multiple survey CSVs, a full run can take **15–45 minutes**. Use a smaller **sample %** (e.g. 1–2%) in the workflow for faster runs (~5–15 min).
 
+### Optional: OpenAI for query conversion
+
+In the app, open **Ask a Question** → **Query settings (optional OpenAI)**. You can:
+- Check **Use OpenAI to interpret questions** and provide an API key (see below). The app converts your question into filters and parameters via the API (no SQL is generated).
+- Click **Test API** to verify the key works before running queries.
+- Leave OpenAI disabled to use **keyword parsing** only (no API key required).
+
+**Where to get the API key (do not commit keys):**
+- **Local:** Copy `.env` from `data_to_decisions` into the **pipeline** project root: `cp /path/to/data_to_decisions/.env /path/to/pipeline/.env`. The file must contain `OPENAI_API_KEY=sk-...`. `.env` is in `.gitignore` and will not be committed.
+- **Streamlit Cloud / production:** Set `OPENAI_API_KEY` in Streamlit secrets.
+- **UI:** You can also paste the key in the Query settings field (not recommended for shared deployments).
+
 ## Local Development (Optional)
 
 ### Run Data Pipeline Locally

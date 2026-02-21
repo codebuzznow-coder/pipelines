@@ -32,10 +32,14 @@ survey_data/
 tfplan
 .terraform.lock.hcl
 
-# Secrets
+# Secrets and keys (do not commit)
 .env
+.env.*
+.env.local
 *.pem
 *.key
+secrets.*
+OPENAI_API_KEY
 
 # Docker
 *.tar.gz
