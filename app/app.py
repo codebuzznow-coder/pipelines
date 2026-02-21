@@ -44,9 +44,9 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-@st.cache_data(ttl=300)
+@st.cache_data(ttl=60)
 def load_data():
-    """Load data from cache."""
+    """Load data from cache (TTL 60s so new pipeline data appears within a minute)."""
     df, year = read_cache()
     return df, year
 
@@ -88,6 +88,10 @@ def render_sidebar():
         else:
             st.warning("No data cache found. Use the **Data Pipeline** tab below to upload and run, or run the GitHub workflow with your S3 path.")
         
+        if st.button("🔄 Refresh data", key="sidebar_refresh_data"):
+            load_data.clear()
+            st.rerun()
+        
         st.divider()
         
         # Metrics summary
@@ -123,6 +127,7 @@ def render_visualization():
     if not cache_exists():
         st.error("No data available. Please run the data pipeline first.")
         st.info("💡 Go to **Data Pipeline** in the sidebar to upload CSV/ZIP files, or run the **Run Data Pipeline** GitHub Action with S3 path `s3://your-bucket/survey_data/`.")
+        st.caption("If you just ran the pipeline (e.g. via GitHub Action), click **Refresh data** in the sidebar to reload the cache.")
         return
     
     df, _ = load_data()
