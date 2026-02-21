@@ -89,10 +89,17 @@ jobs:
           ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
           ECR_REPO: ${{ env.ECR_REPOSITORY }}
           REGION: ${{ env.AWS_REGION }}
+          APP_USERNAME: ${{ secrets.APP_USERNAME }}
+          APP_PASSWORD: ${{ secrets.APP_PASSWORD }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -e
           if [ -z "$EC2_HOST" ] || [ -z "$EC2_SSH_KEY" ]; then
             echo "::error::EC2_HOST and EC2_SSH_KEY must be set in repo secrets."
+            exit 1
+          fi
+          if [ -z "$APP_USERNAME" ] || [ -z "$APP_PASSWORD" ]; then
+            echo "::error::APP_USERNAME and APP_PASSWORD must be set in repo secrets (Settings -> Secrets and variables -> Actions) or login will fail on EC2."
             exit 1
           fi
           mkdir -p ~/.ssh
@@ -103,16 +110,18 @@ jobs:
             echo "Deploy attempt $attempt/3..."
             if ssh $SSH_OPTS ec2-user@$EC2_HOST bash -s << ENDSSH
               set -e
-              ECR_REGISTRY="${ECR_REGISTRY}"
-              ECR_REPO="${ECR_REPO}"
-              REGION="${REGION}"
+              export ECR_REGISTRY='${ECR_REGISTRY}'
+              export ECR_REPO='${ECR_REPO}'
+              export REGION='${REGION}'
+              export APP_USERNAME='${APP_USERNAME}'
+              export APP_PASSWORD='${APP_PASSWORD}'
+              export OPENAI_API_KEY='${OPENAI_API_KEY}'
               aws ecr get-login-password --region \$REGION | sudo docker login --username AWS --password-stdin \$ECR_REGISTRY
               sudo docker pull \$ECR_REGISTRY/\$ECR_REPO:latest
               sudo docker stop survey-qa || true
               sudo docker rm survey-qa || true
               sudo docker run -d --name survey-qa --restart unless-stopped -p 8501:8501 -v survey-data:/app/data \
-                -e APP_USERNAME="\${APP_USERNAME:-}" -e APP_PASSWORD="\${APP_PASSWORD:-}" \
-                -e OPENAI_API_KEY="\${OPENAI_API_KEY:-}" \
+                -e APP_USERNAME="\$APP_USERNAME" -e APP_PASSWORD="\$APP_PASSWORD" -e OPENAI_API_KEY="\$OPENAI_API_KEY" \
                 \$ECR_REGISTRY/\$ECR_REPO:latest
               sleep 10
               curl -f http://localhost:8501/_stcore/health || exit 1

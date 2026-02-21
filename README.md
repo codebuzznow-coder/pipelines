@@ -265,6 +265,7 @@ Only users with valid credentials can sign in. This protects the app and prevent
   ```
 - **First run:** If `APP_USERNAME` or `APP_PASSWORD` are not set, the app shows an error and instructions. Create `app/.env` from `app/.env.example` and add your values.
 - **After login:** You can use Visualization, Data Pipeline (upload/run), Validations & Evals, and Metrics. Use **Logout** in the sidebar to sign out.
+- **App on EC2 (Docker):** The container does not use your local `app/.env`. Add **APP_USERNAME** and **APP_PASSWORD** to the repo’s **GitHub Actions secrets** (Settings → Secrets and variables → Actions). Then redeploy (push to main or run “Build and Deploy”). If you run the container yourself on EC2, use `-e APP_USERNAME=... -e APP_PASSWORD=...` in `docker run`.
 
 ---
 
