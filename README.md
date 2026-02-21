@@ -248,6 +248,13 @@ aws ecr delete-repository --repository-name survey-qa --region us-east-1 --force
      `aws s3 sync s3://YOUR_BUCKET/survey_data/ ./survey_data/` then SSH to EC2 and run the pipeline there, or use the web UI.
 - **Fix:** In `infra/variables.tf` set `allowed_cidr = "0.0.0.0/0"`, run `terraform apply`. Ensure `EC2_HOST` and `EC2_SSH_KEY` are set in GitHub secrets.
 
+### Run Data Pipeline: "Connection reset by peer" / "kex_exchange_identification: read: Connection reset by peer"
+- The workflow now uses **SSH -T** (no pseudo-terminal) and **retries up to 3 times** with a 15s delay. If it still fails:
+  1. **Security group:** Inbound port 22 must allow **0.0.0.0/0** (GitHub’s IPs change).
+  2. **EC2 state:** Instance must be **running**; if it was just started, wait 1–2 minutes for SSH to be ready.
+  3. **Re-run the job:** Transient network/rate limits often clear on a second run.
+  4. **Run locally:** Use the app’s **Data Pipeline** tab at `http://YOUR_EC2_IP:8501` and upload CSV/ZIP, or run the pipeline from your machine via SSH.
+
 ### GitHub Actions fails with "permission denied"
 - Verify `EC2_SSH_KEY` secret contains the full private key including `-----BEGIN` and `-----END` lines
 

@@ -96,7 +96,8 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           
           # Deploy - using 'EOF' in quotes prevents variable expansion, so we use unquoted EOF
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
+          # -T: no pseudo-terminal (avoids CI warning); ServerAlive* helps with connection resets
+          ssh -T -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
             # Set variables on remote
             ECR_REGISTRY="${ECR_REGISTRY}"
             ECR_REPO="${ECR_REPO}"
@@ -140,7 +141,7 @@ jobs:
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          ssh -o StrictHostKeyChecking=no -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
+          ssh -T -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
             # Check if data exists in S3
             if aws s3 ls s3://${S3_BUCKET}/survey_data/ --region ${REGION} 2>/dev/null | grep -qE "\.(csv|zip)"; then
               echo "Found CSV or ZIP files in S3, running data pipeline..."

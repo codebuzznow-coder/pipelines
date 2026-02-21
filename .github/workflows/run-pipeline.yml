@@ -64,6 +64,18 @@ jobs:
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
+          # -T: no pseudo-terminal (avoids "Pseudo-terminal will not be allocated" in CI)
+          # -o ServerAliveInterval/CountMax: detect dead connections; ConnectionTimeout for initial connect
+          SSH_OPTS="-T -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i ~/.ssh/deploy_key"
           REMOTE_CMD="set -e; TEMP_DIR=\$(mktemp -d); echo 'Listing S3 path...'; aws s3 ls '$S3_PATH' --region '$REGION' || true; echo 'Syncing...'; aws s3 sync '$S3_PATH' \$TEMP_DIR/ --region '$REGION' --exclude '*' --include '*.csv' --include '*.zip'; echo 'Contents of temp dir:'; ls -la \$TEMP_DIR; CSV_CNT=\$(find \$TEMP_DIR -name '*.csv' 2>/dev/null | wc -l); ZIP_CNT=\$(find \$TEMP_DIR -name '*.zip' 2>/dev/null | wc -l); if [ \$CSV_CNT -eq 0 ] && [ \$ZIP_CNT -eq 0 ]; then echo '::error::No CSV or ZIP at $S3_PATH. EC2 instance may need IAM access to the bucket (s3:ListBucket, s3:GetObject). Check the instance role.'; exit 1; fi; sudo docker exec survey-qa python -m data_pipeline.run_pipeline --input \$TEMP_DIR --sample-pct $SAMPLE_PCT --seed $SEED; rm -rf \$TEMP_DIR"
-          ssh -o StrictHostKeyChecking=no -o ConnectTimeout=30 -i ~/.ssh/deploy_key ec2-user@$EC2_HOST "$REMOTE_CMD"
-          echo "✅ Pipeline completed. App: http://$EC2_HOST:8501"
+          # Retry SSH up to 3 times (connection reset by peer / kex_exchange_identification can be transient)
+          for attempt in 1 2 3; do
+            if ssh $SSH_OPTS ec2-user@$EC2_HOST "$REMOTE_CMD"; then
+              echo "✅ Pipeline completed. App: http://$EC2_HOST:8501"
+              exit 0
+            fi
+            echo "SSH attempt $attempt failed (exit $?). Retrying in 15s..."
+            sleep 15
+          done
+          echo "::error::SSH to EC2 failed after 3 attempts. Check: EC2 running, security group allows port 22 from 0.0.0.0/0, correct EC2_HOST and EC2_SSH_KEY."
+          exit 255
