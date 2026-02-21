@@ -90,41 +90,38 @@ jobs:
           ECR_REPO: ${{ env.ECR_REPOSITORY }}
           REGION: ${{ env.AWS_REGION }}
         run: |
-          # Setup SSH
+          set -e
+          if [ -z "$EC2_HOST" ] || [ -z "$EC2_SSH_KEY" ]; then
+            echo "::error::EC2_HOST and EC2_SSH_KEY must be set in repo secrets."
+            exit 1
+          fi
           mkdir -p ~/.ssh
           echo "$EC2_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
-          
-          # Deploy - using 'EOF' in quotes prevents variable expansion, so we use unquoted EOF
-          # -T: no pseudo-terminal (avoids CI warning); ServerAlive* helps with connection resets
-          ssh -T -o StrictHostKeyChecking=no -o ConnectTimeout=30 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i ~/.ssh/deploy_key ec2-user@$EC2_HOST << ENDSSH
-            # Set variables on remote
-            ECR_REGISTRY="${ECR_REGISTRY}"
-            ECR_REPO="${ECR_REPO}"
-            REGION="${REGION}"
-            
-            # Login to ECR
-            aws ecr get-login-password --region \$REGION | sudo docker login --username AWS --password-stdin \$ECR_REGISTRY
-            
-            # Pull new image
-            sudo docker pull \$ECR_REGISTRY/\$ECR_REPO:latest
-            
-            # Stop and remove old container
-            sudo docker stop survey-qa || true
-            sudo docker rm survey-qa || true
-            
-            # Run new container
-            sudo docker run -d \
-              --name survey-qa \
-              --restart unless-stopped \
-              -p 8501:8501 \
-              -v survey-data:/app/data \
-              \$ECR_REGISTRY/\$ECR_REPO:latest
-            
-            # Health check
-            sleep 10
-            curl -f http://localhost:8501/_stcore/health || exit 1
+          SSH_OPTS="-T -o StrictHostKeyChecking=no -o ConnectTimeout=45 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -i ~/.ssh/deploy_key"
+          for attempt in 1 2 3; do
+            echo "Deploy attempt $attempt/3..."
+            if ssh $SSH_OPTS ec2-user@$EC2_HOST bash -s << ENDSSH
+              set -e
+              ECR_REGISTRY="${ECR_REGISTRY}"
+              ECR_REPO="${ECR_REPO}"
+              REGION="${REGION}"
+              aws ecr get-login-password --region \$REGION | sudo docker login --username AWS --password-stdin \$ECR_REGISTRY
+              sudo docker pull \$ECR_REGISTRY/\$ECR_REPO:latest
+              sudo docker stop survey-qa || true
+              sudo docker rm survey-qa || true
+              sudo docker run -d --name survey-qa --restart unless-stopped -p 8501:8501 -v survey-data:/app/data \$ECR_REGISTRY/\$ECR_REPO:latest
+              sleep 10
+              curl -f http://localhost:8501/_stcore/health || exit 1
           ENDSSH
+            then
+              echo "Deploy succeeded."
+              exit 0
+            fi
+            [ $attempt -lt 3 ] && echo "SSH failed. Retrying in 20s..." && sleep 20
+          done
+          echo "::error::SSH to EC2 failed after 3 attempts. Connection timed out = port 22 not reachable from GitHub. Fix: 1) Security group: allow inbound port 22 from 0.0.0.0/0. 2) EC2 running with public IP. 3) EC2_HOST = that public IP. See README Troubleshooting."
+          exit 255
       
       - name: Run Data Pipeline (Optional)
         if: success()

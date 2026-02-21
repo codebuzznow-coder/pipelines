@@ -239,6 +239,9 @@ aws ecr delete-repository --repository-name survey-qa --region us-east-1 --force
 - **Wrong:** `https://us-east-1.console.aws.amazon.com/s3/buckets/survey-qa-data-301625833185?region=us-east-1&tab=objects`
 - **Correct:** `s3://survey-qa-data-301625833185/survey_data/` (use your bucket name and the folder that contains your CSV/ZIP files)
 
+### Deploy / Run Data Pipeline: "Connection timed out" or "Connection timed out during banner exchange"
+- Port 22 is not reachable from GitHub. The workflow retries 3 times; if it still fails, allow SSH from anywhere: in `infra/variables.tf` set `allowed_cidr = "0.0.0.0/0"` for port 22, then `terraform apply`. Ensure EC2 is running with a public IP and **EC2_HOST** is that IP.
+
 ### Run Data Pipeline workflow: "ssh: connect to host ... port 22: Connection timed out"
 - GitHub Actions runs from **GitHub’s IPs**, not your own. If your EC2 security group allows only **your IP** (e.g. 173.66.55.228), SSH from GitHub will be blocked.
 - **Options:**
