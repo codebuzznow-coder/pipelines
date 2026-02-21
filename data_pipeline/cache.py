@@ -27,7 +27,8 @@ def build_cache(df: pd.DataFrame, source: str = "pipeline") -> Dict[str, Any]:
     try:
         out = df.copy()
         for col in out.columns:
-            out[col] = out[col].fillna("").astype(str).replace("nan", "")
+            # Convert to string first so Categorical columns don't raise on fillna("")
+            out[col] = out[col].astype(str).fillna("").replace("nan", "")
         
         conn = sqlite3.connect(str(path))
         out.to_sql(DATA_TABLE, conn, if_exists="replace", index=False, chunksize=CHUNK_SIZE)
