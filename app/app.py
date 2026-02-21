@@ -13,12 +13,16 @@ import uuid
 import hmac
 from pathlib import Path
 
-# Load .env from project root or app dir (so OPENAI_API_KEY is available without UI)
+# Load .env from app dir first, then project root (so OPENAI_API_KEY and APP_USERNAME/APP_PASSWORD are set)
 try:
     from dotenv import load_dotenv
-    _root = Path(__file__).resolve().parent.parent
+    _app_dir = Path(__file__).resolve().parent
+    _root = _app_dir.parent
+    # App .env takes precedence (override=True); load from both possible locations
+    load_dotenv(_app_dir / ".env", override=True)
     load_dotenv(_root / ".env")
-    load_dotenv(Path(__file__).resolve().parent / ".env")
+    # If run from project root with "streamlit run app/app.py", cwd may differ; try cwd/app/.env
+    load_dotenv(Path.cwd() / "app" / ".env", override=True)
 except ImportError:
     pass
 
@@ -62,6 +66,13 @@ st.markdown("""
 
 def get_app_credentials():
     """Return (username, password) from env or Streamlit secrets. (None, None) if not configured."""
+    # Ensure app/.env is loaded (in case cwd or import order differed)
+    try:
+        from dotenv import load_dotenv
+        _app_dir = Path(__file__).resolve().parent
+        load_dotenv(_app_dir / ".env", override=True)
+    except Exception:
+        pass
     username = (os.environ.get("APP_USERNAME") or "").strip()
     password = (os.environ.get("APP_PASSWORD") or "").strip()
     if not username or not password:
@@ -86,30 +97,30 @@ def check_login(given_username: str, given_password: str) -> bool:
 
 
 def render_login_page():
-    """Show login form. Returns True if just logged in (caller should rerun)."""
+    """Show login form: username and password fields, then check on submit."""
     st.markdown("## CodeBuzz – Survey Q&A")
     st.caption("Sign in to access the application.")
-    expected_user, expected_pass = get_app_credentials()
-    if not expected_user or not expected_pass:
-        st.error("Login is not configured. Set **APP_USERNAME** and **APP_PASSWORD** in `app/.env` or in Streamlit secrets.")
-        st.markdown("Example in `app/.env`:")
-        st.code("APP_USERNAME=your_username\nAPP_PASSWORD=your_secure_password", language="bash")
-        return False
 
     with st.form("login_form"):
-        username = st.text_input("Username", placeholder="Enter username", autocomplete="username")
-        password = st.text_input("Password", type="password", placeholder="Enter password", autocomplete="current-password")
+        username = st.text_input("Username", placeholder="Enter username", autocomplete="username", key="login_username")
+        password = st.text_input("Password", type="password", placeholder="Enter password", autocomplete="current-password", key="login_password")
         submitted = st.form_submit_button("Sign in")
         if submitted:
             if not username or not password:
                 st.error("Please enter both username and password.")
-            elif check_login(username, password):
-                st.session_state["authenticated"] = True
-                st.session_state["login_username"] = username.strip()
-                st.success("Signed in successfully.")
-                st.rerun()
             else:
-                st.error("Invalid username or password.")
+                expected_user, expected_pass = get_app_credentials()
+                if not expected_user or not expected_pass:
+                    st.error("Login is not configured. Set **APP_USERNAME** and **APP_PASSWORD** in `app/.env` or in Streamlit secrets.")
+                    with st.expander("Example"):
+                        st.code("APP_USERNAME=your_username\nAPP_PASSWORD=your_secure_password", language="bash")
+                elif check_login(username, password):
+                    st.session_state["authenticated"] = True
+                    st.session_state["login_username"] = username.strip()
+                    st.success("Signed in successfully.")
+                    st.rerun()
+                else:
+                    st.error("Invalid username or password.")
     return False
 
 
