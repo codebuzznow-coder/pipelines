@@ -193,10 +193,10 @@ def render_data_pipeline():
     
     # File upload
     uploaded_files = st.file_uploader(
-        "Upload Survey Data CSV files",
-        type=["csv"],
+        "Upload Survey Data (CSV or ZIP)",
+        type=["csv", "zip"],
         accept_multiple_files=True,
-        help="Upload one or more CSV files containing survey data"
+        help="Upload CSV files or ZIP archives containing survey CSVs"
     )
     
     if uploaded_files:
