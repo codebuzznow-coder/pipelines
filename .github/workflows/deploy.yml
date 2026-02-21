@@ -110,7 +110,10 @@ jobs:
               sudo docker pull \$ECR_REGISTRY/\$ECR_REPO:latest
               sudo docker stop survey-qa || true
               sudo docker rm survey-qa || true
-              sudo docker run -d --name survey-qa --restart unless-stopped -p 8501:8501 -v survey-data:/app/data \$ECR_REGISTRY/\$ECR_REPO:latest
+              sudo docker run -d --name survey-qa --restart unless-stopped -p 8501:8501 -v survey-data:/app/data \
+                -e APP_USERNAME="\${APP_USERNAME:-}" -e APP_PASSWORD="\${APP_PASSWORD:-}" \
+                -e OPENAI_API_KEY="\${OPENAI_API_KEY:-}" \
+                \$ECR_REGISTRY/\$ECR_REPO:latest
               sleep 10
               curl -f http://localhost:8501/_stcore/health || exit 1
           ENDSSH
