@@ -4,12 +4,13 @@ CodeBuzz - Survey Q&A Application. Clean, minimal version with observability.
 Usage:
     streamlit run app.py
 
-Optional: add OPENAI_API_KEY=sk-... to app/.env. Do not commit .env; it is in .gitignore.
+Optional: add to app/.env — OPENAI_API_KEY=sk-...; APP_USERNAME and APP_PASSWORD for login. Do not commit .env.
 """
 import os
 import sys
 import time
 import uuid
+import hmac
 from pathlib import Path
 
 # Load .env from project root or app dir (so OPENAI_API_KEY is available without UI)
@@ -57,6 +58,59 @@ st.markdown("""
     .stMetric { background: #262626; padding: 1rem; border-radius: 8px; }
 </style>
 """, unsafe_allow_html=True)
+
+
+def get_app_credentials():
+    """Return (username, password) from env or Streamlit secrets. (None, None) if not configured."""
+    username = (os.environ.get("APP_USERNAME") or "").strip()
+    password = (os.environ.get("APP_PASSWORD") or "").strip()
+    if not username or not password:
+        try:
+            username = username or (st.secrets.get("APP_USERNAME") or "").strip()
+            password = password or (st.secrets.get("APP_PASSWORD") or "").strip()
+        except Exception:
+            pass
+    return (username or None, password or None)
+
+
+def check_login(given_username: str, given_password: str) -> bool:
+    """Constant-time check against configured credentials."""
+    expected_user, expected_pass = get_app_credentials()
+    if not expected_user or not expected_pass:
+        return False
+    u1 = (given_username or "").strip().encode("utf-8")
+    u2 = expected_user.encode("utf-8")
+    p1 = (given_password or "").encode("utf-8") if isinstance(given_password, str) else (given_password or b"")
+    p2 = expected_pass.encode("utf-8") if isinstance(expected_pass, str) else (expected_pass or b"")
+    return hmac.compare_digest(u1, u2) and hmac.compare_digest(p1, p2)
+
+
+def render_login_page():
+    """Show login form. Returns True if just logged in (caller should rerun)."""
+    st.markdown("## CodeBuzz – Survey Q&A")
+    st.caption("Sign in to access the application.")
+    expected_user, expected_pass = get_app_credentials()
+    if not expected_user or not expected_pass:
+        st.error("Login is not configured. Set **APP_USERNAME** and **APP_PASSWORD** in `app/.env` or in Streamlit secrets.")
+        st.markdown("Example in `app/.env`:")
+        st.code("APP_USERNAME=your_username\nAPP_PASSWORD=your_secure_password", language="bash")
+        return False
+
+    with st.form("login_form"):
+        username = st.text_input("Username", placeholder="Enter username", autocomplete="username")
+        password = st.text_input("Password", type="password", placeholder="Enter password", autocomplete="current-password")
+        submitted = st.form_submit_button("Sign in")
+        if submitted:
+            if not username or not password:
+                st.error("Please enter both username and password.")
+            elif check_login(username, password):
+                st.session_state["authenticated"] = True
+                st.session_state["login_username"] = username.strip()
+                st.success("Signed in successfully.")
+                st.rerun()
+            else:
+                st.error("Invalid username or password.")
+    return False
 
 
 @st.cache_data(ttl=60)
@@ -556,6 +610,10 @@ def render_metrics_dashboard():
 
 def main():
     """Main application entry point."""
+    if st.session_state.get("authenticated") is not True:
+        render_login_page()
+        return
+
     # Record app start
     metrics.gauge("app_last_start", time.time())
     metrics.increment("app_starts_total")

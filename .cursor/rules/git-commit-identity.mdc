@@ -1,0 +1,15 @@
+---
+description: Use repository owner's identity for git commits (not Cursor Agent)
+alwaysApply: true
+---
+
+# Git commit identity
+
+When creating or suggesting git commits in this repository:
+
+1. **Use the repository's git user** — Commits must show as the repository owner on GitHub, not "Cursor Agent" or any IDE default.
+2. **Rely on git config** — The repo is configured with `user.name` and `user.email`. When you run `git commit`, do not pass `--author` or set `GIT_AUTHOR_*` to anything other than the repo's configured identity.
+3. **If you run git config** — Only set or suggest `user.name` and `user.email` to the owner's identity (e.g. the same as used in the rest of the repo). Do not set them to "Cursor", "Cursor Agent", or a generic bot email.
+4. **Commit messages** — Write clear, user-focused commit messages; the author of the commit should be the repo owner so GitHub shows the user, not the agent.
+
+To verify identity: `git config user.name` and `git config user.email` should match the repository owner.

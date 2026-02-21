@@ -234,6 +234,18 @@ docker-compose up --build
 
 Access at: http://localhost:8501
 
+### App login (username / password)
+
+Only users with valid credentials can sign in. This protects the app and prevents unauthorized uploads.
+
+- **Configure credentials:** In `app/.env` set `APP_USERNAME` and `APP_PASSWORD` (or set them in Streamlit secrets for deployed apps). Example:
+  ```bash
+  APP_USERNAME=your_username
+  APP_PASSWORD=your_secure_password
+  ```
+- **First run:** If `APP_USERNAME` or `APP_PASSWORD` are not set, the app shows an error and instructions. Create `app/.env` from `app/.env.example` and add your values.
+- **After login:** You can use Visualization, Data Pipeline (upload/run), Validations & Evals, and Metrics. Use **Logout** in the sidebar to sign out.
+
 ---
 
 ## Cleanup (Stop AWS Charges)
