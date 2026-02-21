@@ -89,7 +89,7 @@ def render_sidebar():
             st.warning("No data cache found. Use the **Data Pipeline** tab below to upload and run, or run the GitHub workflow with your S3 path.")
         
         if st.button("🔄 Refresh data", key="sidebar_refresh_data"):
-            st.session_state["_cache_key"] = st.session_state.get("_cache_key", 0) + 1
+            load_data.clear()
             st.rerun()
         
         st.divider()
@@ -125,13 +125,12 @@ def render_visualization():
     st.header("Ask a Question")
     
     if not cache_exists():
-        st.error("No data available. Please run the data pipeline first.")
-        st.info("💡 Go to **Data Pipeline** in the sidebar to upload CSV/ZIP files, or run the **Run Data Pipeline** GitHub Action with S3 path `s3://your-bucket/survey_data/`.")
-        st.caption("If you just ran the pipeline (e.g. via GitHub Action), click **Refresh data** in the sidebar to reload the cache.")
+        st.error("No data available. Load data first:")
+        st.markdown("1. **If you ran the Run Data Pipeline GitHub Action:** click **🔄 Refresh data** in the sidebar — the cache is already on the server.")
+        st.markdown("2. **Otherwise:** go to **Data Pipeline** in the sidebar and upload CSV/ZIP files, then Run Pipeline.")
         return
     
-    cache_key = st.session_state.get("_cache_key", 0)
-    df, _ = load_data(_cache_key=cache_key)
+    df, _ = load_data()
     if df is None or df.empty:
         st.error("Failed to load data from cache.")
         return
@@ -297,7 +296,7 @@ def render_data_pipeline():
                         if result.get("cache", {}).get("ok"):
                             st.success(f"✅ Cache built: {result['cache']['rows']:,} rows")
                             # Bump cache key so Visualization will re-read from disk when user switches tabs
-                            st.session_state["_cache_key"] = st.session_state.get("_cache_key", 0) + 1
+                            load_data.clear()
                         
                         # Show stage details
                         with st.expander("View Stage Details"):

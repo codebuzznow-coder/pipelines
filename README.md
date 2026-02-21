@@ -178,11 +178,22 @@ Replace `<EC2_PUBLIC_IP>` with the IP from Step 3.
 
 ## How to Run the Data Pipeline
 
-- **From GitHub (recommended):** Actions → **Run Data Pipeline** → use S3 path `s3://survey-qa-data-XXXXXXXX/survey_data/` (your bucket from `terraform output s3_bucket`).
-- **From the app:** Open http://YOUR_EC2_IP:8501 → **Data Pipeline** in the sidebar → upload CSV/ZIP files → Run Pipeline.
-- **Locally:** `cd data_pipeline && pip install -r ../app/requirements.txt && python run_pipeline.py --input ../survey_data` (put CSV or ZIP files in `survey_data/` first).
+### Option 1: GitHub Action (recommended — no upload from your laptop)
 
-**Pipeline duration:** On a t3.micro with 10+ Stack Overflow survey CSVs, a full run can take **15–45 minutes** (load → sample → validate → transform → enrich → cache). Use a smaller **sample %** (e.g. 1–2%) in the workflow for faster runs (~5–15 min).
+1. Put your CSV/ZIP files in S3 under a prefix (e.g. `survey_data/`): `s3://YOUR_BUCKET/survey_data/`.
+2. In GitHub: **Actions** → **Run Data Pipeline** → enter S3 path (e.g. `s3://survey-qa-data-XXXXXXXX/survey_data/`) → **Run workflow**.
+3. When the job succeeds, the pipeline has run on EC2 and the cache is built **on the server**.
+4. Open the app at **http://YOUR_EC2_IP:8501** and click **🔄 Refresh data** in the sidebar. The data will load from the server cache — **you do not need to upload files from your laptop**.
+
+### Option 2: From the app (upload in the browser)
+
+Open http://YOUR_EC2_IP:8501 → **Data Pipeline** in the sidebar → upload CSV/ZIP files → Run Pipeline. Then switch to **Visualization** to use the data.
+
+### Option 3: Locally
+
+`cd data_pipeline && pip install -r ../app/requirements.txt && python run_pipeline.py --input ../survey_data` (put CSV or ZIP files in `survey_data/` first).
+
+**Pipeline duration:** On a t3.medium with multiple survey CSVs, a full run can take **15–45 minutes**. Use a smaller **sample %** (e.g. 1–2%) in the workflow for faster runs (~5–15 min).
 
 ## Local Development (Optional)
 
