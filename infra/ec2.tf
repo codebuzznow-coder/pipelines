@@ -88,18 +88,35 @@ resource "aws_iam_role_policy" "app_s3" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Effect = "Allow"
-      Action = [
-        "s3:GetObject",
-        "s3:ListBucket",
-        "s3:PutObject"
-      ]
-      Resource = [
-        aws_s3_bucket.data.arn,
-        "${aws_s3_bucket.data.arn}/*"
-      ]
-    }]
+    Statement = concat(
+      # Terraform-managed bucket: ListBucket on bucket, GetObject/PutObject on objects
+      [
+        {
+          Effect   = "Allow"
+          Action   = ["s3:ListBucket"]
+          Resource = [aws_s3_bucket.data.arn]
+        },
+        {
+          Effect   = "Allow"
+          Action   = ["s3:GetObject", "s3:PutObject"]
+          Resource = ["${aws_s3_bucket.data.arn}/*"]
+        }
+      ],
+      flatten([
+        for arn in var.ec2_additional_s3_bucket_arns : [
+          {
+            Effect   = "Allow"
+            Action   = ["s3:ListBucket"]
+            Resource = [arn]
+          },
+          {
+            Effect   = "Allow"
+            Action   = ["s3:GetObject", "s3:PutObject"]
+            Resource = ["${arn}/*"]
+          }
+        ]
+      ])
+    )
   })
 }
 

@@ -239,6 +239,13 @@ aws ecr delete-repository --repository-name survey-qa --region us-east-1 --force
 - **Wrong:** `https://us-east-1.console.aws.amazon.com/s3/buckets/survey-qa-data-301625833185?region=us-east-1&tab=objects`
 - **Correct:** `s3://survey-qa-data-301625833185/survey_data/` (use your bucket name and the folder that contains your CSV/ZIP files)
 
+### Run Data Pipeline: "No CSV or ZIP at s3://... EC2 instance may need IAM access"
+- **Files location:** The workflow syncs the **prefix** you give (e.g. `survey_data/`). Upload CSV or ZIP files **under that prefix** (e.g. `s3://your-bucket/survey_data/2024.csv` or `survey_data/files.zip`). If the prefix is empty or has no `.csv`/`.zip`, you’ll see this error.
+- **EC2 IAM:** The EC2 instance needs the IAM role that has S3 access. If you used this repo’s Terraform, the instance profile is attached. Verify: AWS Console → EC2 → your instance → **Security** → **IAM role** (e.g. `survey-qa-demo-role`). If there is no role, re-run `terraform apply` or attach the role `survey-qa-<env>-role` to the instance.
+- **Bucket not created by Terraform:** If the bucket (e.g. `survey-qa-data-301625833185`) was created outside this Terraform, add its ARN so the EC2 role can access it. In `infra/terraform.tfvars`:  
+  `ec2_additional_s3_bucket_arns = ["arn:aws:s3:::survey-qa-data-301625833185"]`  
+  Then run `terraform apply`. You can also use this for a bucket in the same account that Terraform didn’t create.
+
 ### Deploy / Run Data Pipeline: "Connection timed out" or "Connection timed out during banner exchange"
 - Port 22 is not reachable from GitHub. The workflow retries 3 times; if it still fails, allow SSH from anywhere: in `infra/variables.tf` set `allowed_cidr = "0.0.0.0/0"` for port 22, then `terraform apply`. Ensure EC2 is running with a public IP and **EC2_HOST** is that IP.
 

@@ -45,3 +45,9 @@ variable "s3_bucket_prefix" {
   type        = string
   default     = "survey-qa-data"
 }
+
+variable "ec2_additional_s3_bucket_arns" {
+  description = "Optional list of S3 bucket ARNs the EC2 instance role can access (e.g. if using a bucket not created by this Terraform)"
+  type        = list(string)
+  default     = []
+}
