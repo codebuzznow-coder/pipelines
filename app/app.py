@@ -64,17 +64,45 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-def get_app_credentials():
-    """Return (username, password) from env or Streamlit secrets. (None, None) if not configured."""
-    # Ensure app/.env is loaded (in case cwd or import order differed)
+def _read_env_file(path: Path) -> dict:
+    """Parse a .env-style file into key=value dict (no quotes/export)."""
+    out = {}
+    if not path.exists():
+        return out
     try:
-        from dotenv import load_dotenv
-        _app_dir = Path(__file__).resolve().parent
-        load_dotenv(_app_dir / ".env", override=True)
+        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            if "=" in line:
+                k, v = line.split("=", 1)
+                out[k.strip()] = v.strip().strip('"').strip("'")
     except Exception:
         pass
+    return out
+
+
+def get_app_credentials():
+    """Return (username, password) from env, app/.env file, or Streamlit secrets."""
     username = (os.environ.get("APP_USERNAME") or "").strip()
     password = (os.environ.get("APP_PASSWORD") or "").strip()
+    # If not in env, try loading app/.env via dotenv then by direct read
+    if not username or not password:
+        try:
+            from dotenv import load_dotenv
+            _app_dir = Path(__file__).resolve().parent
+            load_dotenv(_app_dir / ".env", override=True)
+            username = (os.environ.get("APP_USERNAME") or "").strip()
+            password = (os.environ.get("APP_PASSWORD") or "").strip()
+        except Exception:
+            pass
+    if not username or not password:
+        # Direct read of app/.env so credentials work regardless of cwd
+        _app_dir = Path(__file__).resolve().parent
+        env_path = _app_dir / ".env"
+        env_vars = _read_env_file(env_path)
+        username = (username or env_vars.get("APP_USERNAME") or "").strip()
+        password = (password or env_vars.get("APP_PASSWORD") or "").strip()
     if not username or not password:
         try:
             username = username or (st.secrets.get("APP_USERNAME") or "").strip()
