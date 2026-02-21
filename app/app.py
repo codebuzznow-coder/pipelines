@@ -70,39 +70,57 @@ def _read_env_file(path: Path) -> dict:
     if not path.exists():
         return out
     try:
-        for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-            line = line.strip()
+        text = path.read_text(encoding="utf-8-sig", errors="ignore")  # utf-8-sig strips BOM
+        for line in text.splitlines():
+            line = line.strip().strip("\r")
             if not line or line.startswith("#"):
                 continue
             if "=" in line:
                 k, v = line.split("=", 1)
-                out[k.strip()] = v.strip().strip('"').strip("'")
+                v = v.strip().strip('"').strip("'")
+                if k.strip():
+                    out[k.strip()] = v
     except Exception:
         pass
     return out
+
+
+def _env_file_paths() -> list:
+    """Return candidate paths for app/.env (tries multiple locations)."""
+    base = Path(__file__).resolve().parent
+    root = base.parent
+    cwd = Path.cwd()
+    return [
+        base / ".env",           # app/.env next to app.py
+        root / "app" / ".env",   # project_root/app/.env
+        cwd / "app" / ".env",    # cwd/app/.env (e.g. run from project root)
+        cwd / ".env",            # cwd/.env
+    ]
 
 
 def get_app_credentials():
     """Return (username, password) from env, app/.env file, or Streamlit secrets."""
     username = (os.environ.get("APP_USERNAME") or "").strip()
     password = (os.environ.get("APP_PASSWORD") or "").strip()
-    # If not in env, try loading app/.env via dotenv then by direct read
     if not username or not password:
         try:
             from dotenv import load_dotenv
-            _app_dir = Path(__file__).resolve().parent
-            load_dotenv(_app_dir / ".env", override=True)
+            for p in _env_file_paths():
+                if p.exists():
+                    load_dotenv(p, override=True)
             username = (os.environ.get("APP_USERNAME") or "").strip()
             password = (os.environ.get("APP_PASSWORD") or "").strip()
         except Exception:
             pass
     if not username or not password:
-        # Direct read of app/.env so credentials work regardless of cwd
-        _app_dir = Path(__file__).resolve().parent
-        env_path = _app_dir / ".env"
-        env_vars = _read_env_file(env_path)
-        username = (username or env_vars.get("APP_USERNAME") or "").strip()
-        password = (password or env_vars.get("APP_PASSWORD") or "").strip()
+        for env_path in _env_file_paths():
+            env_vars = _read_env_file(env_path)
+            u = (env_vars.get("APP_USERNAME") or "").strip()
+            p = (env_vars.get("APP_PASSWORD") or "").strip()
+            if u and p:
+                username = username or u
+                password = password or p
+                break
     if not username or not password:
         try:
             username = username or (st.secrets.get("APP_USERNAME") or "").strip()
