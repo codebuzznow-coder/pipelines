@@ -3,7 +3,7 @@
 
 aws_region       = "us-east-1"
 environment      = "demo"
-instance_type    = "t3.micro"
+instance_type    = "t3.medium"   # 2 vCPU, 4 GB RAM
 key_name         = "codebuzz_kp"       # SSH key name (must exist in AWS)
 # Allow SSH and app from anywhere (required for GitHub Actions to deploy / run pipeline)
 allowed_cidr     = "0.0.0.0/0"

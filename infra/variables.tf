@@ -11,9 +11,9 @@ variable "environment" {
 }
 
 variable "instance_type" {
-  description = "EC2 instance type"
+  description = "EC2 instance type (t3.medium = 4GB RAM recommended for pipeline)"
   type        = string
-  default     = "t3.micro"
+  default     = "t3.medium"
 }
 
 variable "key_name" {

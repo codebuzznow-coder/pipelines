@@ -76,11 +76,17 @@ def discover_csv_files(
 def load_data(
     csv_files: List[Path],
     log: Optional[Callable[[str], None]] = None,
+    skip_schema_files: bool = False,
 ) -> pd.DataFrame:
-    """Load and concatenate CSV files, adding survey_year from filename."""
+    """Load and concatenate CSV files, adding survey_year from filename.
+    Set skip_schema_files=True to skip *schema*.csv on low-memory instances (avoids column explosion).
+    """
     _log = log if log else (lambda msg: print(msg, flush=True))
     frames = []
     for f in csv_files:
+        if skip_schema_files and "schema" in f.name.lower():
+            _log(f"  Skipping schema file: {f.name}")
+            continue
         try:
             df = pd.read_csv(f, low_memory=False)
             # Extract year from filename (e.g. survey_2024.csv -> 2024)
@@ -95,7 +101,10 @@ def load_data(
     
     if not frames:
         return pd.DataFrame()
-    return pd.concat(frames, axis=0, ignore_index=True)
+    _log("  Concatenating dataframes...")
+    out = pd.concat(frames, axis=0, ignore_index=True)
+    _log("  Done concatenating.")
+    return out
 
 
 def save_stage_output(df: pd.DataFrame, stage_name: str, stats: Dict[str, Any]):
@@ -167,6 +176,7 @@ def run_pipeline(
     
     # 2. Sample first (reduce volume before heavy stages)
     log(f"\n[2/6] Stratified sampling ({sample_pct*100}% by role)...")
+    log("  Sampling by role (may take a few minutes on large data)...")
     df_sampled, sample_stats = stratified_sample(df, sample_pct=sample_pct, seed=seed)
     save_stage_output(df_sampled, "01_sample", sample_stats)
     result["stages"]["sample"] = {
